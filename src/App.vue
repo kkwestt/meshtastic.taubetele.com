@@ -86,7 +86,7 @@
                   <td>Server: </td> <td>{{devices[device]?.server}}</td>
                 </tr>
                 <tr v-if="devices[device]?.nodeinfo?.sender">
-                  <td>Data recived over Node ID: </td> <td>{{devices[device]?.nodeinfo?.sender}} </td>
+                  <td>Data recieved over Node ID: </td> <td>{{devices[device]?.nodeinfo?.sender}} </td>
                 </tr>
               </tbody>
             </table>
@@ -213,10 +213,10 @@ onMounted(async () => {
           balloonContents += `<div>Server: ${device?.server}</div>`
         }
         console.debug(device)
-        if (device?.nodeinfo?.sender !== undefined) { balloonContents += `<div>Data (nodeinfo) recived over Node ID: ${device?.nodeinfo?.sender} </div>` }
-        if (device?.position?.sender !== undefined) { balloonContents += `<div>Data (position) recived over Node ID: ${device?.position?.sender} </div>` }
-        if (device?.telemetry?.sender !== undefined) { balloonContents += `<div>Data (telemetry) recived over Node ID: ${device?.telemetry?.sender} </div>` }
-        if (device?.telemetry2?.sender !== undefined) { balloonContents += `<div>Data (telemetry2) recived over Node ID: ${device?.telemetry2?.sender} </div>` }
+        if (device?.nodeinfo?.sender !== undefined) { balloonContents += `<div>Data (nodeinfo) recieved over Node ID: ${device?.nodeinfo?.sender} </div>` }
+        if (device?.position?.sender !== undefined) { balloonContents += `<div>Data (position) recieved over Node ID: ${device?.position?.sender} </div>` }
+        if (device?.telemetry?.sender !== undefined) { balloonContents += `<div>Data (telemetry) recieved over Node ID: ${device?.telemetry?.sender} </div>` }
+        if (device?.telemetry2?.sender !== undefined) { balloonContents += `<div>Data (telemetry2) recieved over Node ID: ${device?.telemetry2?.sender} </div>` }
 
         map.geoObjects
           .add(new window.ymaps.Placemark([latitude, longitude], {
