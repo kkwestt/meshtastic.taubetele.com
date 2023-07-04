@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body, html, #app {
+    @apply p-0 m-0 w-full h-full;
+}
+
+table {
+    thead {
+        th {
+            @apply font-semibold text-center;
+        }
+    }
+}
+
+th, td {
+    @apply border p-3;
+}
