@@ -85,8 +85,11 @@
                 <tr v-if="devices[device]?.mqtt">
                   <td>Server: </td> <td>{{devices[device]?.server}}</td>
                 </tr>
-                <tr v-if="devices[device]?.nodeinfo?.sender">
+                <!-- <tr v-if="devices[device]?.nodeinfo?.sender">
                   <td>Data recieved over Node ID: </td> <td>{{devices[device]?.nodeinfo?.sender}} </td>
+                </tr> -->
+                <tr v-if="devices[device]?.text?.payload">
+                  <td>Last public message: </td> <td>{{devices[device]?.text?.payload}} </td>
                 </tr>
               </tbody>
             </table>
@@ -100,7 +103,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useServer } from '../server.js' // vse eche poka odin
+import { useServer } from './servers.js'
 
 const devices = ref()
 const devicesPT = ref()
@@ -110,6 +113,7 @@ const devicesFilter = ref('')
 const filteredDevices = computed(() => {
   const justForDebug = devices
   // TBD TBI
+  // ПОИСКОВИК
   return justForDebug
 })
 
@@ -189,8 +193,6 @@ onMounted(async () => {
     for (const index in devices.value) {
       const device = devices.value[index]
 
-      // console.log('Got sender: ', device?.nodeinfo?.sender, ' Got id: ', device?.nodeinfo?.payload?.id)
-
       const [latitude, longitude] = [device?.position?.payload?.latitude_i / 10000000, device?.position?.payload?.longitude_i / 10000000]
       const name = device?.nodeinfo?.payload?.shortname || device?.nodeinfo?.payload?.longname || device?.nodeinfo?.payload?.id// || device?.position?.from || device?.telemetry?.from
 
@@ -212,11 +214,11 @@ onMounted(async () => {
           balloonContents += '<div class="font-bold">MQTT: YES </div>'
           balloonContents += `<div>Server: ${device?.server}</div>`
         }
-        console.debug(device)
-        if (device?.nodeinfo?.sender !== undefined) { balloonContents += `<div>Data (nodeinfo) recieved over Node ID: ${device?.nodeinfo?.sender} </div>` }
-        if (device?.position?.sender !== undefined) { balloonContents += `<div>Data (position) recieved over Node ID: ${device?.position?.sender} </div>` }
-        if (device?.telemetry?.sender !== undefined) { balloonContents += `<div>Data (telemetry) recieved over Node ID: ${device?.telemetry?.sender} </div>` }
-        if (device?.telemetry2?.sender !== undefined) { balloonContents += `<div>Data (telemetry2) recieved over Node ID: ${device?.telemetry2?.sender} </div>` }
+        if (device?.text?.payload !== undefined) { balloonContents += `<div>Last public message: ${device?.text?.payload} </div>` }
+        // if (device?.nodeinfo?.sender !== undefined) { balloonContents += `<div>Data (nodeinfo) recieved over Node ID: ${device?.nodeinfo?.sender} </div>` }
+        // if (device?.position?.sender !== undefined) { balloonContents += `<div>Data (position) recieved over Node ID: ${device?.position?.sender} </div>` }
+        // if (device?.telemetry?.sender !== undefined) { balloonContents += `<div>Data (telemetry) recieved over Node ID: ${device?.telemetry?.sender} </div>` }
+        // if (device?.telemetry2?.sender !== undefined) { balloonContents += `<div>Data (telemetry2) recieved over Node ID: ${device?.telemetry2?.sender} </div>` }
 
         map.geoObjects
           .add(new window.ymaps.Placemark([latitude, longitude], {
