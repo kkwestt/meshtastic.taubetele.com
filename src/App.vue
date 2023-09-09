@@ -95,8 +95,8 @@
                   <td>Data recieved over Node ID: </td> <td>{{devices[device]?.nodeinfo?.sender}} </td>
                 </tr> -->
                 <tr v-if="devices[device]?.text?.payload">
-                  <td>Last public message: </td> <td>{{devices[device]?.text?.payload}} </td>
-                </tr>
+                  <td>Last public message: </td> <td>{{devices[device]?.text?.payload?.text ? devices[device]?.text?.payload?.text : devices[device]?.text?.payload}} </td>
+                  <!-- {"channel":0,"from":4204317948,"id":741847616,"payload":1233,"sender":"!fa98ccfc","timestamp":1694283590,"to":4294967295,"type":"text"} -->
               </tbody>
             </table>
           </div>
