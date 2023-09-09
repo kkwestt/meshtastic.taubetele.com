@@ -2,23 +2,29 @@
   <div class="flex flex-col xl:flex-row w-full h-full">
     <div class="xl:w-1/3 h-1/2 xl:h-full border-r overflow-y-scroll">
       <div class="bg-neutral-200 transition-colors p-3">
-        <p><b>Meshtastic MQTT Map  </b> <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded">Кнопка</button></p>
+        Meshtastic MQTT Map
+      </div>
+      <div class="flex flex-wrap gap-1 m-1 text-white">
+        <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="text-sm  cursor-pointer bg-blue-500 p-1">
+          {{ server }}
+        </div>
       </div>
       <div v-if="!devices" class="italic p-3">Fetching devices...</div>
       <div v-else class="flex flex-col">
         <div class="px-3 mt-3">
-          <input v-model="devicesFilter" class="w-full border p-3 hover:outline-none focus:outline-none" placeholder="Фильтр" />
+          <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Фильтр" />
         </div>
-        <div class="hover:bg-neutral-100 transition-colors p-3" v-for="device in Object.keys(devices)" :key="device">
-          <div class="select-none cursor-pointer" @click="devices[device].opened = !devices[device].opened">
-            <div class="text-xl flex gap-1.5 cursor-pointer">
+        <div class="hover:bg-neutral-100 transition-colors p-3" v-for="device in filtered" :key="device">
+          <div class="select-none cursor-pointer" >
+            <div class="text-xl flex gap-1.5 cursor-pointer" @click="devices[device].opened = !devices[device].opened">
               <span :class="(Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600 ? 'text-neutral-500' : 'text-blue-600'">
                 <span v-if="devices[device].nodeinfo?.payload?.longname">{{ devices[device].nodeinfo?.payload?.longname }}</span>
                 <span v-else>{{ device }}</span>
               </span>
             </div>
+            <div @click="addToFilter(devices[device].server)" class="text-sm cursor-pointer p-1 w-fit bg-blue-500 text-white">{{ devices[device].server }}</div>
             <div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
-            <div v-else> {{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }} </div>
+            <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div>
           </div>
           <div v-if="devices[device].opened">
             <table>
@@ -102,20 +108,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, shallowRef, computed, onMounted } from 'vue'
 import { useServer } from './servers.js'
 
 const devices = ref()
 const devicesPT = ref()
 const senderList = ref()
-const devicesFilter = ref('')
-
-const filteredDevices = computed(() => {
-  const justForDebug = devices
-  // TBD TBI
-  // ПОИСКОВИК
-  return justForDebug
-})
 
 const hardwareName = {
   0: 'UNSET',
@@ -176,7 +174,10 @@ const fetchDevices = () =>
       }
       return response.json()
     })
-    .then((json) => { devices.value = json })
+    .then((json) => {
+      // console.log(json)
+      devices.value = json
+    })
     .catch((any) => { })
 
 onMounted(async () => {
@@ -239,6 +240,50 @@ onMounted(async () => {
   }
 
   window.ymaps.ready(init)
+})
+
+const filter = shallowRef('')
+
+// this is actually a setFilter
+const addToFilter = (item) => {
+  filter.value = item
+  console.log(item)
+}
+
+const filtered = computed(() => {
+  if (filter.value === '') {
+    return Object.keys(devices.value)
+  }
+  else {
+    const candidates = {}
+    // devices is an object почему-то...
+    const needle = filter.value.toLowerCase()
+    for (const candidate in devices.value) {
+      // сюда
+      if (devices.value[candidate].server.match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+    }
+
+    return Object.keys(candidates)
+
+    // return devices.value.filter(device => device.server.match(filter.value.toLowerCase()))
+  }
+})
+
+const servers = computed(() => {
+  if (devices.value === undefined) {
+    return []
+  }
+  const candidates = new Set()
+  // все еше Object
+  for (const candidate in devices.value) {
+    candidates.add(devices.value[candidate].server)
+  }
+
+  console.log('C', candidates)
+
+  return Array.from(candidates)
 })
 
 </script>
