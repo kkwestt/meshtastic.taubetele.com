@@ -265,6 +265,15 @@ const filtered = computed(() => {
       if (devices.value[candidate].server.match(needle)) {
         candidates[candidate] = devices.value[candidate]
       }
+      else if (devices.value[candidate]?.user?.data?.shortName.match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+      else if (devices.value[candidate]?.user?.data?.longName.match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+      else if (devices.value[candidate]?.user?.data?.id.match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
     }
 
     return Object.keys(candidates)
