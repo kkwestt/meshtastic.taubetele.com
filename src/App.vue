@@ -227,7 +227,7 @@ onMounted(async () => {
             balloonContentBody: ` 
               <div>Node ID: ${device?.user?.data?.id} </div>
               <div>Hardware: ${device?.user?.data?.hwModel}</div>
-              <div>Position: <a href="yandexmaps://maps.yandex.ru/?ll=${latitude},${longitude}&z=12"> ${latitude}, ${longitude}</a></div>
+              <div>Position: <a href="yandexmaps://maps.yandex.ru/?ll=${longitude},${latitude}&z=12"> ${latitude}, ${longitude}</a></div>
 
               <div> ${balloonContents}</div>`,
             balloonContentFooter: `Updated: ${timestampfooter}`
