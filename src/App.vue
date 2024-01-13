@@ -4,8 +4,9 @@
       <div class="bg-neutral-200 transition-colors p-3">
         Meshtastic MQTT Map
       </div>
-      <div class="flex flex-wrap gap-1 m-1 text-white">
-        <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="text-sm  cursor-pointer bg-blue-500 p-1">
+      <div class="flex flex-wrap gap-1 m-1 text-blue-500">
+        <div class="p-1"> Servers:</div>
+        <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="text-sm  cursor-pointer text-white bg-blue-500 p-1">
           {{ server }}
         </div>
       </div>
@@ -18,86 +19,106 @@
           <div class="select-none cursor-pointer" >
             <div class="text-xl flex gap-1.5 cursor-pointer" @click="devices[device].opened = !devices[device].opened">
               <span :class="(Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600 ? 'text-neutral-500' : 'text-blue-600'">
-                <span v-if="devices[device].nodeinfo?.payload?.longname">{{ devices[device].nodeinfo?.payload?.longname }}</span>
+                <span v-if="devices[device].user?.data?.longName">{{ devices[device].user?.data?.longName }}</span>
                 <span v-else>{{ device }}</span>
               </span>
-            </div>
-            <div @click="addToFilter(devices[device].server)" class="text-sm cursor-pointer p-1 w-fit bg-blue-500 text-white">{{ devices[device].server }}</div>
-            <div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
+            <div @click="addToFilter(devices[device].server)" class="text-sm cursor-pointer p-1 w-fit text-blue-500">{{ devices[device].server }}</div>
+          </div><div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
             <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div>
           </div>
           <div v-if="devices[device].opened">
             <table>
               <tbody>
-                <tr v-if="devices[device]?.nodeinfo?.payload?.shortname">
+                <tr v-if="devices[device]?.user?.data?.shortName">
                   <td>Short name</td>
-                  <td>{{ devices[device].nodeinfo.payload.shortname }}</td>
+                  <td>{{ devices[device].user.data.shortName }}</td>
                 </tr>
-                <tr v-if="devices[device]?.nodeinfo?.payload?.hardware">
+                <tr v-if="devices[device]?.user?.data?.hwModel">
                   <td>Hardware</td>
-                  <td>{{ hardwareName[devices[device].nodeinfo.payload.hardware] }}</td>
+                  <td>{{ devices[device].user.data.hwModel }}</td>
                 </tr>
-                <tr v-if="devices[device]?.nodeinfo?.payload?.id">
+                <tr v-if="devices[device]?.user?.data?.id">
                   <td>ID</td>
-                  <td>{{ devices[device].nodeinfo.payload.id }}</td>
+                  <td>{{ devices[device].user.data.id }}</td>
                 </tr>
-                <tr v-if="devices[device]?.position?.payload?.latitude_i">
+                <tr v-if="devices[device]?.position?.data?.latitudeI">
                   <td>Position </td>
-                  <td>{{ Number(devices[device].position.payload.latitude_i / 10000000).toFixed(4) }}, {{ Number(devices[device].position.payload.longitude_i / 10000000).toFixed(4) }}</td>
+                  <td>{{ Number(devices[device].position.data.latitudeI / 10000000).toFixed(4) }}, {{ Number(devices[device].position.data.longitudeI / 10000000).toFixed(4) }}</td>
                 </tr>
-                <tr v-if="devices[device]?.position?.payload?.altitude">
+                <tr v-if="devices[device]?.position?.data?.altitude">
                   <td>Altitude</td>
-                  <td>{{ devices[device].position.payload.altitude }} m</td>
+                  <td>{{ devices[device].position.data.altitude }} m</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry?.payload?.air_util_tx">
+                <tr v-if="devices[device]?.position?.data?.satsInView">
+                  <td>Sat's In View</td>
+                  <td>{{ devices[device].position.data.satsInView }} sat's</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.hopLimit">
+                  <td>Hop Limit</td>
+                  <td>{{ devices[device].user.hopLimit + 1 }}</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.rxSnr">
+                  <td>RX SNR</td>
+                  <td>{{ devices[device].user.rxSnr }} <br> уровень сигнала с которым пришел пакет nodeinfo</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.rxRssi">
+                  <td>RX RSSI</td>
+                  <td>{{ devices[device].user.rxRssi }} <br> уровень сигнала с которым пришел пакет nodeinfo</td>
+                </tr>
+                <tr v-if="devices[device]?.telemetry?.data?.deviceMetrics?.airUtilTx">
                   <td>Air util tx</td>
-                  <td>{{ Number(devices[device].telemetry.payload.air_util_tx).toFixed(1) }} %</td>
+                  <td>{{ Number(devices[device].telemetry.data.deviceMetrics.airUtilTx).toFixed(1) }} %</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry?.payload?.channel_utilization">
+                <tr v-if="devices[device]?.telemetry?.data?.deviceMetrics?.channelUtilization">
                   <td>Channel utilization</td>
-                  <td>{{ Number(devices[device].telemetry.payload.channel_utilization).toFixed(1) }} %</td>
+                  <td>{{ Number(devices[device].telemetry.data.deviceMetrics.channelUtilization).toFixed(1) }} %</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry?.payload?.voltage">
+                <tr v-if="devices[device]?.user?.channel >= 0">
+                  <td>Lora channel</td>
+                  <td>{{ devices[device].user.channel }}</td>
+                </tr>
+                <tr v-if="devices[device]?.telemetry?.data?.deviceMetrics?.voltage">
                   <td>Battery voltage</td>
-                  <td>{{ Number(devices[device].telemetry.payload.voltage).toFixed(1) }} V</td>
+                  <td>{{ Number(devices[device]?.telemetry?.data?.deviceMetrics?.voltage).toFixed(1) }} V</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry?.payload?.battery_level">
+                <tr v-if="devices[device]?.telemetry?.data?.deviceMetrics?.batteryLevel">
                   <td>Battery level</td>
-                  <td>{{ Math.round(devices[device].telemetry.payload.battery_level) }} %</td>
+                  <td>{{ (devices[device].telemetry.data.deviceMetrics.batteryLevel > 100) ? 100 : (Math.round(devices[device].telemetry.data.deviceMetrics.batteryLevel))  }} %</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry2?.payload?.barometric_pressure">
+                <tr v-if="devices[device]?.telemetry2?.data?.deviceMetrics?.barometricPressure">
                   <td>Barometric pressure</td>
-                  <td>{{ Math.round(devices[device].telemetry2.payload.barometric_pressure) }} hPa</td>
+                  <td>{{ Math.round(devices[device].telemetry.data.environmentMetrics.barometricPressure) }} hPa</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry2?.payload?.current">
+                <tr v-if="devices[device]?.telemetry?.data?.environmentMetrics?.current">
                   <td>Current</td>
-                  <td>{{ devices[device].telemetry2.payload.current }}</td>
+                  <td>{{ devices[device].telemetry.data.environmentMetrics.current }}</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry2?.payload?.gas_resistance">
+                <tr v-if="devices[device]?.telemetry?.data?.environmentMetrics?.voltage">
+                  <td>Voltage</td>
+                  <td>{{ devices[device].telemetry.data.environmentMetrics.voltage }}</td>
+                </tr>
+                <tr v-if="devices[device]?.telemetry?.data?.environmentMetrics?.gasResistance">
                   <td>Gas</td>
-                  <td>{{ Number(devices[device].telemetry2.payload.gas_resistance).toFixed(1) }}</td>
+                  <td>{{ Number(devices[device].telemetry.data.environmentMetrics.gasResistance).toFixed(0) }} MOhms</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry2?.payload?.relative_humidity">
+                <tr v-if="devices[device]?.telemetry?.data?.environmentMetrics?.relativeHumidity">
                   <td>Humidity</td>
-                  <td>{{ Math.round(devices[device].telemetry2.payload.relative_humidity) }} %</td>
+                  <td>{{ Number(devices[device].telemetry.data.environmentMetrics.relativeHumidity).toFixed(0) }} %</td>
                 </tr>
-                <tr v-if="devices[device]?.telemetry2?.payload?.temperature">
+                <tr v-if="devices[device]?.telemetry?.data?.environmentMetrics?.temperature">
                   <td>Temperature</td>
-                  <td>{{ Number(devices[device].telemetry2.payload.temperature).toFixed(1) }} ℃</td>
+                  <td>{{ Number(devices[device].telemetry.data.environmentMetrics.temperature).toFixed(1) }} ℃</td>
                 </tr>
-                <tr v-if="devices[device]?.mqtt">
-                  <td>MQTT: </td> <td>Online</td>
-                </tr>
+                <!-- <tr v-if="devices[device]?.mqtt">
+                  <td><div class="font-bold">MQTT: </div></td> <td><div class="font-bold">Online</div></td>
+                </tr> -->
                 <tr v-if="devices[device]?.mqtt">
                   <td>Server: </td> <td>{{devices[device]?.server}}</td>
                 </tr>
-                <!-- <tr v-if="devices[device]?.nodeinfo?.sender">
-                  <td>Data recieved over Node ID: </td> <td>{{devices[device]?.nodeinfo?.sender}} </td>
-                </tr> -->
-                <tr v-if="devices[device]?.text?.payload">
-                  <td>Last public message: </td> <td>{{devices[device]?.text?.payload?.text ? devices[device]?.text?.payload?.text : devices[device]?.text?.payload}} </td>
-                  <!-- {"channel":0,"from":4204317948,"id":741847616,"payload":1233,"sender":"!fa98ccfc","timestamp":1694283590,"to":4294967295,"type":"text"} -->
-              </tbody>
+                <tr v-if="devices[device]?.text?.data || devices[device]?.message?.data">
+                  <td>Last public message: </td> <td>{{devices[device]?.message?.data }} </td>
+                </tr>
+                </tbody>
             </table>
           </div>
         </div>
@@ -114,45 +135,6 @@ import { useServer } from './servers.js'
 const devices = ref()
 const devicesPT = ref()
 const senderList = ref()
-
-const hardwareName = {
-  0: 'UNSET',
-  1: 'TLORA V2',
-  2: 'TLORA V1',
-  3: 'TLORA V2.1 1.6',
-  4: 'TBEAM',
-  5: 'HELTEC_V2.0',
-  6: 'TBEAM V0.7',
-  7: 'T-ECHO',
-  8: 'TLORA V1 1.3',
-  9: 'RAK4631',
-  10: 'HELTEC V2.1',
-  11: 'HELTEC V1',
-  12: 'LILYGO TBEAM S3 CORE',
-  13: 'RAK11200',
-  14: 'NANO G1',
-  15: 'TLORA V2.1 1.8',
-  16: 'TLORA T3 S3',
-  17: 'NANO G1 EXPLORER',
-  25: 'STATION G1',
-  26: 'RAK11310',
-  32: 'LORA RELAY V1',
-  33: 'NRF52840DK',
-  34: 'PPR',
-  35: 'GENIEBLOCKS',
-  36: 'NRF52 UNKNOWN',
-  37: 'PORTDUINO',
-  38: 'ANDROID SIM',
-  39: 'DIY V1',
-  40: 'NRF52840 PCA10059',
-  41: 'DR DEV',
-  42: 'M5STACK',
-  43: 'HELTEC V3',
-  44: 'HELTEC WSL V3',
-  45: 'BETAFPV 2400 TX',
-  46: 'BETAFPV 900 NANO TX',
-  47: 'RPI PICO'
-}
 
 const timeAgo = (date) => {
   const seconds = Math.floor((new Date() - date) / 1000)
@@ -175,7 +157,11 @@ const fetchDevices = () =>
       return response.json()
     })
     .then((json) => {
-      // console.log(json)
+      const names = Object.keys(json);
+      names.forEach(name => {
+        json[name].timestamp = new Date(json[name].timestamp).getTime() / 1000;
+      })
+
       devices.value = json
     })
     .catch((any) => { })
@@ -194,29 +180,40 @@ onMounted(async () => {
     for (const index in devices.value) {
       const device = devices.value[index]
 
-      const [latitude, longitude] = [device?.position?.payload?.latitude_i / 10000000, device?.position?.payload?.longitude_i / 10000000]
-      const name = device?.nodeinfo?.payload?.shortname || device?.nodeinfo?.payload?.longname || device?.nodeinfo?.payload?.id// || device?.position?.from || device?.telemetry?.from
+      const [latitude, longitude] = [device?.position?.data?.latitudeI / 10000000, device?.position?.data?.longitudeI / 10000000]
+      const name = device?.user?.data?.shortName || device?.user?.data?.longName || device?.user?.data?.id// || device?.position?.from || device?.telemetry?.from
 
       if (latitude && longitude) {
-        let presetcolor = device?.nodeinfo?.payload?.hardware == 39 ? 'islands#redStretchyIcon' : 'islands#blueStretchyIcon'
+        let presetcolor = device?.user?.data?.hwModel === 'DIY_V1' ? 'islands#redStretchyIcon' : 'islands#blueStretchyIcon'
         presetcolor = (Math.round(Date.now() / 1000) - device.timestamp > 3600) ? 'islands#greyStretchyIcon' : presetcolor
         const timestampfooter = (Math.round(Date.now() / 1000) - device.timestamp > 3600) ? (new Date(device.timestamp * 1000).toLocaleString()) : (timeAgo(new Date(device.timestamp * 1000).getTime()))
 
         let balloonContents = ''
-        if (device?.position?.payload?.altitude !== undefined) { balloonContents += `<div>Altitude: ${Number(device?.position?.payload?.altitude).toFixed(1)} m</div>` }
-        if (device?.telemetry2?.payload?.temperature !== undefined) { balloonContents += `<div>Temperature: ${Number(device?.telemetry2?.payload?.temperature).toFixed(1)} C</div>` }
-        if (device?.telemetry2?.payload?.humidity !== undefined) { balloonContents += `<div>Humidity: ${Number(device?.telemetry2?.payload?.humidity).toFixed(1)} %</div>` }
-        if (device?.telemetry2?.payload?.barometric_pressure !== undefined) { balloonContents += `<div>Barometric pressure: ${Math.round(device?.telemetry2?.payload?.barometric_pressure)} hPa</div>` }
-        if (device?.telemetry?.payload?.voltage !== undefined) { balloonContents += `<div>Battery voltage: ${Number(device?.telemetry?.payload?.voltage).toFixed(1)} V</div>` }
-        if (device?.telemetry?.payload?.battery !== undefined) { balloonContents += `<div>Battery level: ${Number(device?.telemetry?.payload?.battery).toFixed(1)} %</div>` }
-        if (device?.telemetry?.payload?.air_util_tx !== undefined) { balloonContents += `<div>Air util tx: ${Number(device?.telemetry?.payload?.air_util_tx).toFixed(1)} %</div>` }
-        if (device?.telemetry?.payload?.channel_utilization !== undefined) { balloonContents += `<div>Channel utilization: ${Number(device?.telemetry?.payload?.channel_utilization).toFixed(1)} %</div>` }
-        if (device?.mqtt) {
-          balloonContents += '<div class="font-bold">MQTT: YES </div>'
-          balloonContents += `<div>Server: ${device?.server}</div>`
-        }
-        if (device?.text?.payload !== undefined) { balloonContents += `<div>Last public message: ${device?.text?.payload} </div>` }
-        // if (device?.nodeinfo?.sender !== undefined) { balloonContents += `<div>Data (nodeinfo) recieved over Node ID: ${device?.nodeinfo?.sender} </div>` }
+        if (device?.position?.data?.altitude) { balloonContents += `<div>Altitude: ${Number(device?.position?.data?.altitude).toFixed(0)} m</div>` }
+        if (device?.position?.data?.satsInView) { balloonContents += `<div>Sat's in view: ${device?.position?.data?.satsInView} Sat's</div>`}
+      
+        if (device?.telemetry?.data?.environmentMetrics?.temperature) { balloonContents += `<div>Temperature: ${Number(device?.telemetry?.data?.environmentMetrics?.temperature).toFixed(1)} C</div>` }
+        if (device?.telemetry?.data?.environmentMetrics?.relativeHumidity) { balloonContents += `<div>Humidity: ${Number(device?.telemetry?.data?.environmentMetrics?.relativeHumidity).toFixed(0)} %</div>` }
+        if (device?.telemetry?.data?.environmentMetrics?.barometricPressure) { balloonContents += `<div>Pressure: ${Math.round(device?.telemetry?.data?.environmentMetrics?.barometricPressure)} hPa</div>` }
+        if (device?.telemetry?.data?.environmentMetrics?.gasResistance) { balloonContents += `<div>Gas Resistance (AQI): ${Number(device?.telemetry?.data?.environmentMetrics?.gasResistance).toFixed(0)} MOhms</div>` }
+        if (device?.telemetry?.data?.environmentMetrics?.voltage) { balloonContents += `<div>Battery voltage: ${Number(device?.telemetry?.data?.environmentMetrics?.voltage).toFixed(1)} V</div>` }
+        if (device?.telemetry?.data?.environmentMetrics?.current) { balloonContents += `<div>Current: ${Number(device?.telemetry?.data?.environmentMetrics?.current).toFixed(1)} %</div>` }
+
+        if (device?.telemetry?.data?.deviceMetrics?.batteryLevel) { balloonContents += `<div>Battery level: ${Number(device?.telemetry?.data?.deviceMetrics?.batteryLevel).toFixed(0) > 100 ? 100 : Number(device?.telemetry?.data?.deviceMetrics?.batteryLevel).toFixed(0)} %</div>` }
+        if (device?.telemetry?.data?.deviceMetrics?.voltage) { balloonContents += `<div>Battery voltage: ${Number(device?.telemetry?.data?.deviceMetrics?.voltage).toFixed(1)} V</div>` }
+        if (device?.telemetry?.data?.deviceMetrics?.channelUtilization) { balloonContents += `<div>Channel utilization: ${Number(device?.telemetry?.data?.deviceMetrics?.channelUtilization).toFixed(1)} %</div>` }
+        if (device?.telemetry?.data?.deviceMetrics?.airUtilTx) { balloonContents += `<div>Air util TX: ${Number(device?.telemetry?.data?.deviceMetrics?.airUtilTx).toFixed(1)} %</div>` }
+
+        if (device?.user?.rxSnr) { balloonContents += `<div>RX SNR: ${Math.round(device?.user?.rxSnr).toFixed(0)}</div>` }
+        if (device?.user?.rxRssi) { balloonContents += `<div>RX RSSI: ${Math.round(device?.user?.rxRssi).toFixed(0)}</div>` }
+        if (device?.user?.hopLimit) { balloonContents += `<div>Hop Limit: ${Number(device?.user?.hopLimit + 1)}</div>` }
+
+        // if (device?.mqtt !== undefined) {
+        //   balloonContents += `<div class="font-bold">MQTT: YES </div>`
+        //   balloonContents += `<div>Server: ${device?.server}</div>`
+        // }
+        if (device?.message?.data !== undefined) { balloonContents += `<div>Last public message: ${device.message.data} </div>` }
+        // if (device?.user?.sender !== undefined) { balloonContents += `<div>Data (user) recieved over Node ID: ${device?.user?.sender} </div>` }
         // if (device?.position?.sender !== undefined) { balloonContents += `<div>Data (position) recieved over Node ID: ${device?.position?.sender} </div>` }
         // if (device?.telemetry?.sender !== undefined) { balloonContents += `<div>Data (telemetry) recieved over Node ID: ${device?.telemetry?.sender} </div>` }
         // if (device?.telemetry2?.sender !== undefined) { balloonContents += `<div>Data (telemetry2) recieved over Node ID: ${device?.telemetry2?.sender} </div>` }
@@ -225,19 +222,24 @@ onMounted(async () => {
           .add(new window.ymaps.Placemark([latitude, longitude], {
             iconContent: name,
             balloonContentHeader: `
-              <div>ShortName: ${device?.nodeinfo?.payload?.shortname}</div>
-              <div>LongName: ${device?.nodeinfo?.payload?.longname}</div>`,
+              <div>Short Name: ${device?.user?.data?.shortName}</div>
+              <div>Long Name: ${device?.user?.data?.longName}</div>`,
             balloonContentBody: ` 
-              <div>Node ID: ${device?.nodeinfo?.payload?.id} </div>
-              <div>Hardware: ${hardwareName[device?.nodeinfo?.payload?.hardware]}</div>
-              <div>Position: ${latitude}, ${longitude}</div>
+              <div>Node ID: ${device?.user?.data?.id} </div>
+              <div>Hardware: ${device?.user?.data?.hwModel}</div>
+              <div>Position: <a href="yandexmaps://maps.yandex.ru/?ll=${latitude},${longitude}&z=12"> ${latitude}, ${longitude}</a></div>
+
               <div> ${balloonContents}</div>`,
             balloonContentFooter: `Updated: ${timestampfooter}`
           }, { preset: `${presetcolor}` }))
       }
+      
     }
+
+    
     // map.setBounds(map.geoObjects(), { checkZoomRange: true })
   }
+
 
   window.ymaps.ready(init)
 })
@@ -281,7 +283,7 @@ const servers = computed(() => {
     candidates.add(devices.value[candidate].server)
   }
 
-  console.log('C', candidates)
+  // console.log('C', candidates)
 
   return Array.from(candidates)
 })
