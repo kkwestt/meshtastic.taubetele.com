@@ -170,9 +170,19 @@ onMounted(async () => {
   await fetchDevices()
   setInterval(fetchDevices, 30 * 1000)
 
+  let geolocation = [55.76, 37.64]
+  
+  if (await navigator.geolocation) { 
+    navigator.geolocation.getCurrentPosition((position) => {
+      console.log(geolocation)
+      geolocation = [position.coords.latitude, position.coords.longitude]
+      console.log(geolocation)
+    })
+  }
+
   const init = () => {
     const map = new window.ymaps.Map('map', {
-      center: [55.76, 37.64],
+      center: geolocation,
       zoom: 9,
       controls: ['smallMapDefaultSet']
     })
@@ -236,7 +246,6 @@ onMounted(async () => {
       
     }
 
-    
     // map.setBounds(map.geoObjects(), { checkZoomRange: true })
   }
 
