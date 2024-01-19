@@ -1,28 +1,28 @@
 <template>
-  <div class="flex flex-col xl:flex-row w-full h-full">
-    <div class="xl:w-1/3 h-1/2 xl:h-full border-r overflow-y-scroll">
-      <div class="bg-neutral-200 transition-colors p-3">
+  <div class="flex flex-col w-full h-full xl:flex-row">
+    <div class="overflow-y-scroll border-r xl:w-1/3 h-1/2 xl:h-full">
+      <div class="p-3 transition-colors bg-neutral-200">
         Meshtastic MQTT Map
       </div>
       <div class="flex flex-wrap gap-1 m-1 text-blue-500">
         <div class="p-1"> Servers:</div>
-        <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="text-sm  cursor-pointer text-white bg-blue-500 p-1">
+        <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="p-1 text-sm text-white bg-blue-500 cursor-pointer">
           {{ server }}
         </div>
       </div>
-      <div v-if="!devices" class="italic p-3">Fetching devices...</div>
+      <div v-if="!devices" class="p-3 italic">Fetching devices...</div>
       <div v-else class="flex flex-col">
         <div class="px-3 mt-3">
           <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Фильтр" />
         </div>
-        <div class="hover:bg-neutral-100 transition-colors p-3" v-for="device in filtered" :key="device">
-          <div class="select-none cursor-pointer" >
+        <div class="p-3 transition-colors hover:bg-neutral-100" v-for="device in filtered" :key="device">
+          <div class="cursor-pointer select-none" >
             <div class="text-xl flex gap-1.5 cursor-pointer" @click="devices[device].opened = !devices[device].opened">
               <span :class="(Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600 ? 'text-neutral-500' : 'text-blue-600'">
                 <span v-if="devices[device].user?.data?.longName">{{ devices[device].user?.data?.longName }}</span>
                 <span v-else>{{ device }}</span>
               </span>
-            <div @click="addToFilter(devices[device].server)" class="text-sm cursor-pointer p-1 w-fit text-blue-500">{{ devices[device].server }}</div>
+            <div @click="addToFilter(devices[device].server)" class="p-1 text-sm text-blue-500 cursor-pointer w-fit">{{ devices[device].server }}</div>
           </div><div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
             <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div>
           </div>
@@ -227,7 +227,7 @@ onMounted(async () => {
             balloonContentBody: ` 
               <div>Node ID: ${device?.user?.data?.id} </div>
               <div>Hardware: ${device?.user?.data?.hwModel}</div>
-              <div>Position: <a href="yandexmaps://maps.yandex.ru/?ll=${longitude},${latitude}&z=12"> ${latitude}, ${longitude}</a></div>
+              <div>Position: <a href="yandexmaps://maps.yandex.ru/?ll=${latitude},${longitude}&z=12"> ${latitude}, ${longitude}</a></div>
 
               <div> ${balloonContents}</div>`,
             balloonContentFooter: `Updated: ${timestampfooter}`
@@ -261,17 +261,23 @@ const filtered = computed(() => {
     // devices is an object почему-то...
     const needle = filter.value.toLowerCase()
     for (const candidate in devices.value) {
+      console.log(
+        devices.value[candidate].server,
+        devices.value[candidate]?.user?.data?.shortName,
+        devices.value[candidate]?.user?.data?.longName,
+        devices.value[candidate]?.user?.data?.id
+      )
       // сюда
       if (devices.value[candidate].server.match(needle)) {
         candidates[candidate] = devices.value[candidate]
       }
-      else if (devices.value[candidate]?.user?.data?.shortName.match(needle)) {
+      else if (devices.value[candidate]?.user?.data?.shortName.toLowerCase().match(needle)) {
         candidates[candidate] = devices.value[candidate]
       }
-      else if (devices.value[candidate]?.user?.data?.longName.match(needle)) {
+      else if (devices.value[candidate]?.user?.data?.longName.toLowerCase().match(needle)) {
         candidates[candidate] = devices.value[candidate]
       }
-      else if (devices.value[candidate]?.user?.data?.id.match(needle)) {
+      else if (devices.value[candidate]?.user?.data?.id.toLowerCase().match(needle)) {
         candidates[candidate] = devices.value[candidate]
       }
     }
