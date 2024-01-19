@@ -1,14 +1,15 @@
 <template>
   <div class="flex flex-col w-full h-full xl:flex-row">
     <div class="overflow-y-scroll border-r xl:w-1/3 h-1/2 xl:h-full">
-      <div class="p-3 transition-colors bg-neutral-200">
+      <div class="p-3 transition-colors bg-neutral-200 font-bold">
         Meshtastic MQTT Map
       </div>
-      <div class="flex flex-wrap gap-1 m-1 text-blue-500">
-         <!-- <div class="px-2 p-1" @click="devices[device].allNodes = !devices[device].allNodes"> -->
+      <div class="flex flex-wrap gap-1 m-1 text-blue-500 px-2">
+         <!-- <div @click="devices[device].allNodes = !devices[device].allNodes"> -->
+          <div @click="moveMap">
           <div v-if="!devices">Показаны ноды за все время</div>
-          <div v-if="devices">Показаны ноды за последние сутки</div>
-         <!-- </div> -->
+          <div v-else>Показаны ноды за 24часа</div>
+         </div>
       </div>
       <div v-if="!devices" class="p-3 italic">Fetching devices...</div>
       <div v-else class="flex flex-col">
@@ -22,7 +23,7 @@
                 <span v-if="devices[device].user?.data?.longName">{{ devices[device].user?.data?.longName }}</span>
                 <span v-else>{{ device }}</span>
               </span>
-            <div @click="addToFilter(devices[device].server)" class="p-1 text-sm text-blue-500 cursor-pointer w-fit">{{ devices[device].server }}</div>
+            
           </div>
             <div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)" @click="addToFilter(devices[device].user?.data?.longName)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
             <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div>
@@ -30,7 +31,11 @@
           <div v-if="devices[device].opened">
             <table>
               <tbody>
-                <tr v-if="devices[device]?.user?.data?.shortName">
+                <tr>
+                  <td>MQTT Server</td>
+                  <td><div @click="addToFilter(devices[device].server)" class="p-1 text-sm text-blue-500 cursor-pointer w-fit">{{ devices[device].server }}</div></td>
+              </tr>
+                  <tr v-if="devices[device]?.user?.data?.shortName">
                   <td>Short name</td>
                   <td>{{ devices[device].user.data.shortName }}</td>
                 </tr>
@@ -168,11 +173,11 @@ const fetchDevices = () =>
 
 onMounted(async () => {
   await fetchDevices()
-  setInterval(fetchDevices, 15 * 1000)
+  setInterval(fetchDevices, 30 * 1000)
 
   let geolocation = [55.76, 37.64]
   
-  const isGeolocationOk = await navigator.geolocation
+  // const isGeolocationOk = await navigator.geolocation
   if (navigator.geolocation) { 
     navigator.geolocation.getCurrentPosition((position) => {
       console.log('Moscow location:', geolocation)
@@ -181,7 +186,7 @@ onMounted(async () => {
       // map.setCenter(new YMaps.GeoPoint(7.64, 5.76), 4);
     })
   } else {
-  console.log('хуйня')
+    console.log('хуйня')
   }
 
   const init = () => {
@@ -247,14 +252,24 @@ onMounted(async () => {
             balloonContentFooter: `Updated: ${timestampfooter}`
           }, { preset: `${presetcolor}` }))
       }
-      
-    }
+    } 
 
-    // map.setBounds(map.geoObjects(), { checkZoomRange: true })
+    // map.setBounds(map.geoObjects.getBounds()); //Установить границы карты по объектам
+    // map.setZoom(map.getZoom()+1); // Чуть-чуть уменьшить зум для красоты
+    // map.margin.setDefaultMargin(50); // Края вокруг точек
+
+    // Установим центр карты на ближайшем городе
+    // map.setCenter(res.geoObjects.get(0).geometry.getCoordinates(), map.action.getCurrentState().zoom, { duration: 1000, checkZoomRange: true  });
+    // Добавим точку на карту
+    // map.geoObjects.add(res.geoObjects.get(0));
   }
-
   window.ymaps.ready(init)
+  // window.ymaps.update() // после каждого фетча надо делать этоооо!
 })
+
+const moveMap = () =>{
+  window.ymaps.update()
+}
 
 const filter = shallowRef('')
 
