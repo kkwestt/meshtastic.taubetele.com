@@ -5,15 +5,15 @@
         Meshtastic MQTT Map
       </div>
       <div class="flex flex-wrap gap-1 m-1 text-blue-500">
-        <!-- <div class="p-1"> Servers:</div>
-        <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="p-1 text-sm text-white bg-blue-500 cursor-pointer">
-          {{ server }}
-        </div> -->
+         <!-- <div class="px-2 p-1" @click="devices[device].allNodes = !devices[device].allNodes"> -->
+          <div v-if="!devices">Показаны ноды за все время</div>
+          <div v-if="devices">Показаны ноды за последние сутки</div>
+         <!-- </div> -->
       </div>
       <div v-if="!devices" class="p-3 italic">Fetching devices...</div>
       <div v-else class="flex flex-col">
-        <div class="px-3 mt-3">
-          <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Фильтр" />
+        <div class="px-3 mt-1">
+          <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Filter by shortName/longName/server/id" />
         </div>
         <div class="p-3 transition-colors hover:bg-neutral-100" v-for="device in filtered" :key="device">
           <div class="cursor-pointer select-none" >
@@ -23,7 +23,8 @@
                 <span v-else>{{ device }}</span>
               </span>
             <div @click="addToFilter(devices[device].server)" class="p-1 text-sm text-blue-500 cursor-pointer w-fit">{{ devices[device].server }}</div>
-          </div><div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)" @click="addToFilter(devices[device].user?.data?.longName)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
+          </div>
+            <div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)" @click="addToFilter(devices[device].user?.data?.longName)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
             <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div>
           </div>
           <div v-if="devices[device].opened">
@@ -161,23 +162,26 @@ const fetchDevices = () =>
       names.forEach(name => {
         json[name].timestamp = new Date(json[name].timestamp).getTime() / 1000;
       })
-
       devices.value = json
     })
     .catch((any) => { })
 
 onMounted(async () => {
   await fetchDevices()
-  setInterval(fetchDevices, 30 * 1000)
+  setInterval(fetchDevices, 15 * 1000)
 
   let geolocation = [55.76, 37.64]
   
-  if (await navigator.geolocation) { 
+  const isGeolocationOk = await navigator.geolocation
+  if (navigator.geolocation) { 
     navigator.geolocation.getCurrentPosition((position) => {
-      console.log(geolocation)
+      console.log('Moscow location:', geolocation)
       geolocation = [position.coords.latitude, position.coords.longitude]
-      console.log(geolocation)
+      console.log('User location:  ',geolocation)
+      // map.setCenter(new YMaps.GeoPoint(7.64, 5.76), 4);
     })
+  } else {
+  console.log('хуйня')
   }
 
   const init = () => {
@@ -193,7 +197,7 @@ onMounted(async () => {
       const [latitude, longitude] = [device?.position?.data?.latitudeI / 10000000, device?.position?.data?.longitudeI / 10000000]
       const name = device?.user?.data?.shortName || device?.user?.data?.longName || device?.user?.data?.id// || device?.position?.from || device?.telemetry?.from
 
-      if (latitude && longitude && (Math.round(Date.now() / 1000) - device.timestamp < 86400) ) {
+      if (latitude && longitude && (Math.round(Date.now() / 1000) - device.timestamp < 86400)) {
         let presetcolor = device?.user?.data?.hwModel === 'DIY_V1' ? 'islands#redStretchyIcon' : 'islands#blueStretchyIcon'
         presetcolor = (Math.round(Date.now() / 1000) - device.timestamp > 3600) ? 'islands#greyStretchyIcon' : presetcolor
         const timestampfooter = (Math.round(Date.now() / 1000) - device.timestamp > 3600) ? (new Date(device.timestamp * 1000).toLocaleString()) : (timeAgo(new Date(device.timestamp * 1000).getTime()))
@@ -249,7 +253,6 @@ onMounted(async () => {
     // map.setBounds(map.geoObjects(), { checkZoomRange: true })
   }
 
-
   window.ymaps.ready(init)
 })
 
@@ -290,10 +293,7 @@ const filtered = computed(() => {
         candidates[candidate] = devices.value[candidate]
       }
     }
-
     return Object.keys(candidates)
-
-    // return devices.value.filter(device => device.server.match(filter.value.toLowerCase()))
   }
 })
 
@@ -306,9 +306,7 @@ const servers = computed(() => {
   for (const candidate in devices.value) {
     candidates.add(devices.value[candidate].server)
   }
-
   // console.log('C', candidates)
-
   return Array.from(candidates)
 })
 
