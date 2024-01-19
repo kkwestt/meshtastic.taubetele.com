@@ -5,10 +5,10 @@
         Meshtastic MQTT Map
       </div>
       <div class="flex flex-wrap gap-1 m-1 text-blue-500">
-        <div class="p-1"> Servers:</div>
+        <!-- <div class="p-1"> Servers:</div>
         <div @click="addToFilter(server)" v-for="server in servers" :key="server" class="p-1 text-sm text-white bg-blue-500 cursor-pointer">
           {{ server }}
-        </div>
+        </div> -->
       </div>
       <div v-if="!devices" class="p-3 italic">Fetching devices...</div>
       <div v-else class="flex flex-col">
@@ -23,7 +23,7 @@
                 <span v-else>{{ device }}</span>
               </span>
             <div @click="addToFilter(devices[device].server)" class="p-1 text-sm text-blue-500 cursor-pointer w-fit">{{ devices[device].server }}</div>
-          </div><div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
+          </div><div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)" @click="addToFilter(devices[device].user?.data?.longName)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
             <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div>
           </div>
           <div v-if="devices[device].opened">
@@ -193,7 +193,7 @@ onMounted(async () => {
       const [latitude, longitude] = [device?.position?.data?.latitudeI / 10000000, device?.position?.data?.longitudeI / 10000000]
       const name = device?.user?.data?.shortName || device?.user?.data?.longName || device?.user?.data?.id// || device?.position?.from || device?.telemetry?.from
 
-      if (latitude && longitude) {
+      if (latitude && longitude && (Math.round(Date.now() / 1000) - device.timestamp < 86400) ) {
         let presetcolor = device?.user?.data?.hwModel === 'DIY_V1' ? 'islands#redStretchyIcon' : 'islands#blueStretchyIcon'
         presetcolor = (Math.round(Date.now() / 1000) - device.timestamp > 3600) ? 'islands#greyStretchyIcon' : presetcolor
         const timestampfooter = (Math.round(Date.now() / 1000) - device.timestamp > 3600) ? (new Date(device.timestamp * 1000).toLocaleString()) : (timeAgo(new Date(device.timestamp * 1000).getTime()))
