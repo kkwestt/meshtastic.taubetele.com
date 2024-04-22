@@ -145,7 +145,6 @@
 
 <script setup>
 import { ref, unref, shallowRef, computed, onMounted } from 'vue'
-import { useServer } from './servers.js'
 
 /*
   import { useBreakpoints } from '@vueuse/core' — реактивный оверинжиниринг, котоырй ещё и npm-мить
@@ -177,10 +176,10 @@ const timeAgo = (date) => {
   return Math.floor(seconds) + ' sec ago'
 }
 
-const server = useServer()
+// const server = useServer()
 
 const fetchDevices = () =>
-  fetch(server.theOnlyOne)
+  fetch('/')
     .then((response) => {
       if (!response.ok) {
         throw new Error('Network response was not ok')
