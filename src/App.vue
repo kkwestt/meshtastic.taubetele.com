@@ -1,30 +1,233 @@
 <template>
   <dots-map
     @infoOpen="handleInfoOpen"
+    @tableOpen="handleTableOpen"
+    :devices="devices"
   />
+  <modal v-if="shouldShowInfoModal" title="Info" @close="handleInfoClose">
+    <p>
+      Сайт рыбатекст поможет дизайнеру, верстальщику, вебмастеру сгенерировать
+      несколько абзацев более менее осмысленного текста рыбы на русском языке, а
+      начинающему оратору отточить навык публичных выступлений в домашних
+      условиях. При создании генератора мы использовали небезизвестный
+      универсальный код речей. Текст генерируется абзацами случайным образом от
+      двух до десяти предложений в абзаце, что позволяет сделать текст более
+      привлекательным и живым для визуально-слухового восприятия.
+    </p>
+    <p>
+      По своей сути рыбатекст является альтернативой традиционному lorem ipsum,
+      который вызывает у некторых людей недоумение при попытках прочитать рыбу
+      текст. В отличии от lorem ipsum, текст рыба на русском языке наполнит
+      любой макет непонятным смыслом и придаст неповторимый колорит советских
+      времен.
+    </p>
+  </modal>
+
   <modal
-    v-if="shouldShowInfoModal"
-    title="О нас"
-    @close="handleInfoClose"
+    v-if="shouldShowTableModal"
+    title="ALL DEVICES LIST"
+    @close="handleTableClose"
   >
-    <p>
-      Сайт рыбатекст поможет дизайнеру, верстальщику, вебмастеру сгенерировать несколько абзацев более менее осмысленного текста рыбы на русском языке, а начинающему оратору отточить навык публичных выступлений в домашних условиях. При создании генератора мы использовали небезизвестный универсальный код речей. Текст генерируется абзацами случайным образом от двух до десяти предложений в абзаце, что позволяет сделать текст более привлекательным и живым для визуально-слухового восприятия.
-    </p>
-    <p>
-      По своей сути рыбатекст является альтернативой традиционному lorem ipsum, который вызывает у некторых людей недоумение при попытках прочитать рыбу текст. В отличии от lorem ipsum, текст рыба на русском языке наполнит любой макет непонятным смыслом и придаст неповторимый колорит советских времен.
-    </p>
-    <p>
-      Сайт рыбатекст поможет дизайнеру, верстальщику, вебмастеру сгенерировать несколько абзацев более менее осмысленного текста рыбы на русском языке, а начинающему оратору отточить навык публичных выступлений в домашних условиях. При создании генератора мы использовали небезизвестный универсальный код речей. Текст генерируется абзацами случайным образом от двух до десяти предложений в абзаце, что позволяет сделать текст более привлекательным и живым для визуально-слухового восприятия.
-    </p>
-    <p>
-      По своей сути рыбатекст является альтернативой традиционному lorem ipsum, который вызывает у некторых людей недоумение при попытках прочитать рыбу текст. В отличии от lorem ipsum, текст рыба на русском языке наполнит любой макет непонятным смыслом и придаст неповторимый колорит советских времен.
-    </p>
+  <div v-if="!devices">Loading...</div>
+  <div v-else>
+    <div class="px-3 mt-3 mb-1">
+          <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Filter by shortName/longName/server/id" />
+    </div>
+    <div class="p-3 transition-colors hover:bg-neutral-100" v-for="device in filtered" :key="device">
+          <div class="cursor-pointer select-none" >
+            <div class="text-xl flex gap-1.5 cursor-pointer" @click="devices[device].opened = !devices[device].opened">
+              <span :class="(Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600 ? 'text-neutral-500' : 'text-blue-600'">
+                <span v-if="devices[device]?.user?.data?.longName">{{ devices[device]?.user?.data?.longName }}</span>
+                <span v-else>{{ device }}</span>
+              </span>
+          </div>
+            <div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)" @click="addToFilter(devices[device].user?.data?.longName)"> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
+            <!-- <div v-else>{{ timeAgo(new Date(devices[device].timestamp * 1000).getTime()) }}</div> -->
+          </div>
+          <div v-if="devices[device].opened">
+            <table>
+              <tbody>
+                <tr>
+                  <td>MQTT Server</td>
+                  <td><div @click="addToFilter(devices[device].server)" class="p-1 text-sm text-blue-500 cursor-pointer w-fit">{{ devices[device].server }}</div></td>
+              </tr>
+                  <tr v-if="devices[device]?.user?.data?.shortName">
+                  <td>Short name</td>
+                  <td>{{ devices[device].user.data.shortName }}</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.data?.hwModel">
+                  <td>Hardware</td>
+                  <td>{{ devices[device].user.data.hwModel }}</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.data?.id">
+                  <td>ID</td>
+                  <td>{{ devices[device].user.data.id }} 
+                    ({{ (devices[device]?.position?.from) ? devices[device]?.position?.from : devices[device]?.deviceMetrics?.from }})</td>
+                </tr>
+                <tr v-if="devices[device]?.position?.data?.latitudeI">
+                  <td>Position </td>
+                  <td>{{ Number(devices[device].position.data.latitudeI / 10000000).toFixed(4) }}, {{ Number(devices[device].position.data.longitudeI / 10000000).toFixed(4) }}</td>
+                </tr>
+                <tr v-if="devices[device]?.position?.data?.altitude">
+                  <td>Altitude</td>
+                  <td>{{ devices[device].position.data.altitude }} m</td>
+                </tr>
+                <tr v-if="devices[device]?.position?.data?.satsInView">
+                  <td>Sat's In View</td>
+                  <td>{{ devices[device].position.data.satsInView }} sat's</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.hopLimit">
+                  <td>User Hop Limit</td>
+                  <td> {{ devices[device].user.hopLimit }}</td>
+                </tr>
+                <tr v-if="devices[device]?.position?.hopLimit">
+                  <td>Position Hop Limit</td>
+                  <td>{{ devices[device].position.hopLimit }}</td>
+                </tr>
+                <tr v-if="devices[device]?.deviceMetrics?.hopLimit">
+                  <td>Telemetry Hop Limit</td>
+                  <td>{{ devices[device].deviceMetrics.hopLimit }}</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.rxSnr">
+                  <td>RX SNR</td>
+                  <td>{{ devices[device].user.rxSnr }} <br> уровень сигнала с которым пришел пакет nodeinfo</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.rxRssi">
+                  <td>RX RSSI</td>
+                  <td>{{ devices[device].user.rxRssi }} <br> уровень сигнала с которым пришел пакет nodeinfo</td>
+                </tr>
+                <tr v-if="devices[device]?.deviceMetrics?.data?.deviceMetrics?.airUtilTx">
+                  <td>Air util tx</td>
+                  <td>{{ Number(devices[device].deviceMetrics.data.deviceMetrics.airUtilTx).toFixed(1) }} %</td>
+                </tr>
+                <tr v-if="devices[device]?.deviceMetrics?.data?.deviceMetrics?.channelUtilization">
+                  <td>Channel utilization</td>
+                  <td>{{ Number(devices[device].deviceMetrics.data.deviceMetrics.channelUtilization).toFixed(1) }} %</td>
+                </tr>
+                <tr v-if="devices[device]?.user?.channel >= 0">
+                  <td>Lora channel</td>
+                  <td>{{ devices[device].user.channel }}</td>
+                </tr>
+                <tr v-if="devices[device]?.deviceMetrics?.data?.deviceMetrics?.voltage">
+                  <td>Battery voltage</td>
+                  <td>{{ Number(devices[device]?.deviceMetrics?.data?.deviceMetrics?.voltage).toFixed(2) }} V</td>
+                </tr>
+                <tr v-if="devices[device]?.deviceMetrics?.data?.deviceMetrics?.batteryLevel">
+                  <td>Battery level</td>
+                  <td>{{ (devices[device].deviceMetrics.data.deviceMetrics.batteryLevel > 100) ? 100 : (Math.round(devices[device].deviceMetrics.data.deviceMetrics.batteryLevel))  }} %</td>
+                </tr>
+                <tr v-if="devices[device]?.environmentMetrics?.data?.deviceMetrics?.barometricPressure">
+                  <td>Barometric pressure</td>
+                  <td>{{ Math.round(devices[device].environmentMetrics.data.environmentMetrics.barometricPressure) }} hPa</td>
+                </tr>
+                <tr v-if="devices[device]?.environmentMetrics?.data?.environmentMetrics?.current">
+                  <td>Current</td>
+                  <td>{{ devices[device].environmentMetrics.data.environmentMetrics.current }}</td>
+                </tr>
+                <tr v-if="devices[device]?.environmentMetrics?.data?.environmentMetrics?.voltage">
+                  <td>Voltage</td>
+                  <td>{{ devices[device].environmentMetrics.data.environmentMetrics.voltage }}</td>
+                </tr>
+                <tr v-if="devices[device]?.environmentMetrics?.data?.environmentMetrics?.gasResistance">
+                  <td>Gas</td>
+                  <td>{{ Number(devices[device].environmentMetrics.data.environmentMetrics.gasResistance).toFixed(0) }} MOhms</td>
+                </tr>
+                <tr v-if="devices[device]?.environmentMetrics?.data?.environmentMetrics?.relativeHumidity">
+                  <td>Humidity</td>
+                  <td>{{ Number(devices[device].environmentMetrics.data.environmentMetrics.relativeHumidity).toFixed(0) }} %</td>
+                </tr>
+                <tr v-if="devices[device]?.environmentMetrics?.data?.environmentMetrics?.temperature">
+                  <td>Temperature</td>
+                  <td>{{ Number(devices[device].environmentMetrics.data.environmentMetrics.temperature).toFixed(1) }} ℃</td>
+                </tr>
+                 <tr v-if="devices[device]?.mqtt">
+                  <td><div class="font-bold">MQTT: </div></td> <td><div class="font-bold">Online</div></td>
+                </tr>
+                <tr v-if="devices[device]?.mqtt">
+                  <td>Server: </td> <td>{{devices[device]?.server}}</td>
+                </tr>
+                <tr v-if="devices[device]?.text?.data || devices[device]?.message?.data">
+                  <td>Last public message: </td> <td>{{devices[device]?.message?.data }} </td>
+                </tr>
+                </tbody>
+            </table>
+          </div>
+        </div>
+  </div>
   </modal>
 </template>
 <script setup>
-import { ref } from 'vue';
-import Modal from './components/Modal.vue';
-import DotsMap from './components/map/DotsMap.vue';
+import { ref, onMounted, computed, shallowRef } from "vue";
+
+import Modal from "./components/Modal.vue";
+import DotsMap from "./components/map/DotsMap.vue";
+
+const devices = ref();
+
+const fetchDevices = () =>
+  fetch("/api")
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      return response.json();
+    })
+    .then((json) => {
+      const names = Object.keys(json);
+      names.forEach((name) => {
+        json[name].timestamp = new Date(json[name].timestamp).getTime() / 1000;
+      });
+      devices.value = json; 
+    })
+    .catch(() => {
+      console.log("cannot fetch");
+    });
+
+onMounted(async () => { 
+  await fetchDevices();
+
+  setInterval(() => {
+    fetchDevices();
+  }, 20000);
+});
+
+/////////// filter
+const filter = shallowRef('')
+
+const addToFilter = (item) => {
+  filter.value = item
+}
+const filtered = computed(() => {
+  if (!filter.value) {
+    return Object.keys(devices.value)
+  }
+  else {
+    const candidates = {} 
+    const needle = filter.value.toLowerCase()
+    for (const candidate in devices.value) {
+      // console.log(
+        // devices.value[candidate].server,
+        // devices.value[candidate]?.user?.data?.shortName,
+        // devices.value[candidate]?.user?.data?.longName,
+        // devices.value[candidate]?.user?.data?.id
+      // )
+      if (devices.value[candidate].server.match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+      else if (devices.value[candidate]?.user?.data?.shortName.toLowerCase().match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+      else if (devices.value[candidate]?.user?.data?.longName.toLowerCase().match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+      else if (devices.value[candidate]?.user?.data?.id.toLowerCase().match(needle)) {
+        candidates[candidate] = devices.value[candidate]
+      }
+    }
+    return Object.keys(candidates)
+  }
+})
+
 
 const shouldShowInfoModal = ref(false);
 
@@ -34,5 +237,15 @@ const handleInfoOpen = () => {
 
 const handleInfoClose = () => {
   shouldShowInfoModal.value = false;
+};
+
+const shouldShowTableModal = ref(false);
+
+const handleTableOpen = () => {
+  shouldShowTableModal.value = true;
+};
+
+const handleTableClose = () => {
+  shouldShowTableModal.value = false;
 };
 </script>

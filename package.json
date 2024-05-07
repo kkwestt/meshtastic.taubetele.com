@@ -18,6 +18,7 @@
     "autoprefixer": "^10.4.14",
     "chart.js": "^4.4.2",
     "install": "^0.13.0",
+    "lodash-es": "^4.17.21",
     "moment": "^2.29.4",
     "postcss": "^8.4.24",
     "sass": "^1.63.6",
