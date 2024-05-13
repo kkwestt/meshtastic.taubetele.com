@@ -1,6 +1,10 @@
 <template>
   <div class="modal-overlay">
-    <div class="modal">
+    <div
+      class="modal"
+      :style="{ maxWidth: `${maxWidth}px` }"
+      :class="{ 'full-height': fullHeight, 'full-width': fullWidth  }"
+    >
       <div class="modal_wrapper">
         <div class="modal_header">
           <div class="modal_title">
@@ -24,13 +28,25 @@
   </div>
 </template>
 <script setup>
-  import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 
-  defineProps({
-    title: String,
-  })
+const props = defineProps({
+  title: String,
+  maxWidth: {
+    type: Number,
+    default: 500,
+  },
+  fullWidth: {
+    type: Boolean,
+    default: false,
+  },
+  fullHeight: {
+    type: Boolean,
+    default: false,
+  }
+});
 </script>
-<style>
+<style lang="scss">
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -42,7 +58,7 @@
 
   .modal {
     position: absolute;
-    max-height: 60vh;
+    max-height: 80vh;
     width: 60%;
     max-width: 500px;
     background-color: rgb(255, 255, 255);
@@ -53,6 +69,16 @@
     display: flex;
     flex-direction: column;
     padding: 10px 0 20px 20px;
+
+    &.full-height {
+      height: 100vh;
+      max-height: 100vh !important;
+    }
+
+    &.full-width {
+      width: 100vw;
+      max-width: 100vw !important;
+    }
   }
 
   .modal_header {

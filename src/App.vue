@@ -2,6 +2,7 @@
   <dots-map
     @infoOpen="handleInfoOpen"
     @tableOpen="handleTableOpen"
+    @chartOpen="handleChartOpen"
     :devices="devices"
   />
   <modal v-if="shouldShowInfoModal" title="Info" @close="handleInfoClose">
@@ -155,14 +156,30 @@
         </div>
   </div>
   </modal>
+
+  <charts-modal
+    v-if="shouldShowChartsModal"
+    :maxWidth=900
+    :nodeId="chosenNodeId"
+    @close="handleChartsModalClose"
+  />
+
 </template>
 <script setup>
 import { ref, onMounted, computed, shallowRef } from "vue";
 
 import Modal from "./components/Modal.vue";
 import DotsMap from "./components/map/DotsMap.vue";
+import ChartsModal from "./components/ChartsModal.vue";
 
 const devices = ref();
+const chosenNodeId = ref();
+
+const shouldShowChartsModal = computed(() => Boolean(chosenNodeId.value));
+
+const handleChartsModalClose = () => {
+  chosenNodeId.value = null;
+}
 
 const fetchDevices = () =>
   fetch("/api")
@@ -190,6 +207,10 @@ onMounted(async () => {
     fetchDevices();
   }, 20000);
 });
+
+const handleChartOpen = (nodeId) => {
+  chosenNodeId.value = nodeId;
+};
 
 /////////// filter
 const filter = shallowRef('')

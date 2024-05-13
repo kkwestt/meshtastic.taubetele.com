@@ -1,5 +1,9 @@
 <template>
-  <div id="map" class="w-full h-full"></div>
+  <div
+    id="map"
+    class="w-full h-full"
+    @click="handleMapClick"
+  ></div>
 </template>
 
 <script setup>
@@ -15,7 +19,16 @@ import {
 
 import { debounce } from "lodash-es";
 
-const emit = defineEmits(["infoOpen", "tableOpen"]);
+const emit = defineEmits(["infoOpen", "tableOpen", "chartOpen"]);
+
+const handleMapClick = (event) => {
+  const { nodeId } = event.target.dataset;
+  if (nodeId) {
+    emit("chartOpen", nodeId);
+  }
+}
+
+const chartIcon = '<svg xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 448 512"><path d="M160 80c0-26.5 21.5-48 48-48h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V80zM0 272c0-26.5 21.5-48 48-48H80c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V272zM368 96h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H368c-26.5 0-48-21.5-48-48V144c0-26.5 21.5-48 48-48z" fill="currentColor" /></svg>';
 
 const props = defineProps({
   devices: {
@@ -88,6 +101,9 @@ onMounted(async () => {
 
     for (const index in devices) {
       const device = devices[index];
+      const nodeId = device?.position?.from
+        ? device?.position?.from
+        : device?.deviceMetrics?.from;
 
       const [latitude, longitude] = [
         device?.position?.data?.latitudeI / 10000000,
@@ -138,9 +154,14 @@ onMounted(async () => {
 
       const { environmentMetrics } = device?.environmentMetrics?.data || {};
       if (environmentMetrics?.temperature) {
-        balloonContents += `<div>Temperature: ${Number(
-          device?.environmentMetrics?.data?.environmentMetrics?.temperature
-        ).toFixed(1)} C</div>`;
+        balloonContents += `<div>
+          Temperature: ${Number(environmentMetrics?.temperature).toFixed(1)} C
+          <button
+            class="chart-button"
+            type="button"
+            data-node-id="${nodeId}"
+          >${chartIcon}</button>
+        </div>`;
       }
       if (environmentMetrics?.relativeHumidity) {
         balloonContents += `<div>Humidity: ${Number(
@@ -250,11 +271,7 @@ onMounted(async () => {
               <div>Short Name: ${device?.user?.data?.shortName}</div>
               <div>Long Name: ${device?.user?.data?.longName}</div>`,
             balloonContentBody: ` 
-              <div>Node ID: ${device?.user?.data?.id} (${
-              device?.position?.from
-                ? device?.position?.from
-                : device?.deviceMetrics?.from
-            })</div>
+              <div>Node ID: ${device?.user?.data?.id} (${nodeId})</div>
               <div>Hardware: ${device?.user?.data?.hwModel}</div>
               <div>Role: ${device?.user?.data?.role}</div>
 
@@ -422,6 +439,15 @@ const servers = computed(() => {
   }
   @media (min-width: 500px) and (max-width: 600px) {
     @apply text-sm;
+  }
+}
+
+.chart-button {
+  font-size: 14px;
+  color: blue;
+
+  svg {
+    pointer-events: none;
   }
 }
 </style>

@@ -17,6 +17,8 @@
     "apexcharts": "^3.48.0",
     "autoprefixer": "^10.4.14",
     "chart.js": "^4.4.2",
+    "highcharts": "^11.4.1",
+    "highcharts-vue": "^2.0.1",
     "install": "^0.13.0",
     "lodash-es": "^4.17.21",
     "moment": "^2.29.4",
