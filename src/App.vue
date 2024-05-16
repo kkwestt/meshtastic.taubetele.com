@@ -50,12 +50,14 @@
   <modal
     v-if="shouldShowTableModal"
     title="ALL DEVICES LIST"
+    full-height
+    full-width
     @close="handleTableClose"
   >
   <div v-if="!devices">Loading...</div>
   <div v-else>
-    <div class="px-3 mt-3 mb-1">
-          <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Filter by shortName/longName/server/id" />
+    <div class="px-3 mt-3 pb-1 filter-wrapper">
+      <input v-model="filter" class="w-full border p-1.5 hover:outline-none focus:outline-none" placeholder="Filter by shortName/longName/server/id" />
     </div>
     <div class="p-3 transition-colors hover:bg-neutral-100" v-for="device in filtered" :key="device">
           <div class="cursor-pointer select-none" >
@@ -293,3 +295,11 @@ const handleTableClose = () => {
   shouldShowTableModal.value = false;
 };
 </script>
+<style lang="scss">
+.filter-wrapper {
+  position: sticky;
+  top: 0;
+  left: 0;
+  background: white;
+}
+</style>
