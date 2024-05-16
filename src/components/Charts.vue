@@ -47,9 +47,9 @@ const chartValues = {
 };
 
 const chartOptions = computed(() => ({
-  chart: {
-    type: 'spline'
-  },
+  // chart: {
+  //   type: 'spline'
+  // },
   title: {
     text: '',
   },
@@ -70,11 +70,14 @@ const chartOptions = computed(() => ({
   },
   plotOptions: {
     spline: {
-      // marker: {
-      //   radius: 1,
+      // dataLabels: { 
+      //   enabled: true
+      // },
+      marker: {
+        radius: 4
       //   lineColor: '#666666',
       //   lineWidth: 1
-      // }
+      }
     }
   },
   series: [{

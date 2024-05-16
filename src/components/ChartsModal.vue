@@ -42,22 +42,22 @@ const props = defineProps({
 });
 
 const titles = {
-  device: 'device',
-  airUtilTx: 'air util tx',
-  batteryLevel: 'battery level',
-  channelUtilization: 'channel utilization',
-  voltage: 'voltage',
-  environment: 'environment',
-  barometricPressure: 'barometric pressure',
-  current: 'current',
-  gasResistance: 'gas resistance',
-  relativeHumidity: 'relative humidity',
-  temperature: 'temperature',
+  device: 'Device',
+  airUtilTx: 'Air Util Tx',
+  batteryLevel: 'Battery Level',
+  channelUtilization: 'Channel Utilization',
+  voltage: 'Battery Voltage',
+  environment: 'Environment',
+  barometricPressure: 'Barometric Pressure',
+  current: 'Current',
+  gasResistance: 'Gas Resistance (AQI)',
+  relativeHumidity: 'Relative Humidity',
+  temperature: 'Temperature',
 };
 
 const metrics = {
-  device: ['airUtilTx', 'batteryLevel', 'channelUtilization', 'voltage'],
-  environment: ['barometricPressure', 'current', 'gasResistance', 'relativeHumidity', 'temperature'],
+  device: [ 'batteryLevel', 'voltage', 'channelUtilization', 'airUtilTx' ],
+  environment: ['temperature', 'relativeHumidity', 'barometricPressure',  'gasResistance', 'current' ],
 };
 
 const metricsList = Object.keys(metrics);

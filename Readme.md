@@ -1,63 +1,26 @@
 # WHATIS
 
-https://meshtastic.taubetele.com/
-
-Not a pet. Not a product-grade. Just a try to educate `@kkwestt` to read this `Readme.md` and notify `@zwoelf` if it's read.
-Before start it, run redis docker container.
-
-# Config it
-
 ```bash
-cat server.js
-```
-
-```js
-export const useServer = () => {
-  // const theOnlyOne = 'https://api.meshtasticback.taubetele.com'
-  const theOnlyOne = 'http://localhost'
-  return {
-    theOnlyOne
-  }
-}
-```
-
-
-# WHATIS
-
 https://meshtastic.taubetele.com/
-
-
-Not a pet. Not a product-grade. Just a try to educate `@kkwestt` to read this `Readme.md` and notify `@zwoelf` if it's read.
-Before start it, run redis docker container.
-
-# Config it
-
-```bash
-cat server.js
 ```
 
-```js
-export const useServer = () => {
-  // const theOnlyOne = 'https://api.meshtasticback.taubetele.com'
-  const theOnlyOne = 'http://localhost' // poka tak v deve
-  return {
-    theOnlyOne
-  }
-}
-```
+A nearly live map of Meshtastic nodes seen by Meshtastic MQTT servers.
+
+Before start it, run redis docker container + back (api.meshtastic.taubetele.com) + mqtt server (optional).
 
 
-### Task list
+
+## Task list
 
 - [x] Show node's on the map
 - [x] Diveces data list
     - [x] Search
-    - [ ] Button > modal window > readeble table
+    - [x] Button > modal window > readeble table
+    - [ ] Beautify (people readeble table)
 - [x] Telegram bot forwards public messages
     - [ ] add some reciver
 - [x] Show MQTT connected node's
 - [x] Show points in the window only, do not draw unnecessary
-    - [ ] redraw timer
 - [x] Background update by timer 20s
 - [ ] Telemetry charts
 	- [x] collect telemetry data
@@ -65,4 +28,15 @@ export const useServer = () => {
 - [ ] GPS track by node
 	- [x] collect location data
 	- [x] returns data on request
-- [ ] Show real connections between nodes (based on user pings)
+- [ ] Show real connections between nodes, layer with switch (based on user pings)
+- [ ] Switch to simplified data
+- [ ] Remember the last position of map in window
+- [ ] Dark themes
+
+## Contributors list
+
+- @kkwestt
+- @zwoelf
+- Vadim Kudr
+- @JulesSoulfly
+- @AnastasiiaRyabchikova
