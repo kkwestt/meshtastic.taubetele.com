@@ -5,27 +5,31 @@
     title="Charts"
     @close="$emit('close')"
   >
-    <div>
-      <div v-for="metric in metricsList">
-        <div class="tab-title">
-          {{ titles[metric] }}
-        </div>
-        <div class="tabs">
-          <button
-            type="button"
-            class="tab"
-            :class="{ active: types.includes(item) }"
-            v-for="item in metrics[metric]"
-            @click="handleTabClick(item)"
-          >
-            {{ titles[item] }}
-          </button>
+    <div class="charts-wrapper">
+      <div class="tabs">
+        <div v-for="metric in metricsList">
+          <div class="tab-title">
+            {{ titles[metric] }}
+          </div>
+          <div class="tabs">
+            <button
+              type="button"
+              class="tab"
+              :class="{ active: types.includes(item) }"
+              v-for="item in metrics[metric]"
+              @click="handleTabClick(item)"
+            >
+              {{ titles[item] }}
+            </button>
+          </div>
         </div>
       </div>
+      <div class="charts-container">
+        <charts
+          :series="chartSeries"
+        />
+      </div>
     </div>
-    <charts
-      :series="chartSeries"
-    />
   </modal>
 </template>
 <script setup>
@@ -118,6 +122,20 @@ onMounted(() => {
 });
 </script>
 <style lang="scss">
+.charts-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.charts-container {
+  flex-grow: 1;
+
+  .hc {
+    height: 100%;
+  }
+}
+
 .tab-title {
   margin-bottom: 10px;
   text-transform: uppercase;

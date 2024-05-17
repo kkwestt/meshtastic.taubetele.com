@@ -18,9 +18,7 @@
         </button>
       </div>
       <div class="modal_body">
-        <div>
-          <slot />
-        </div>
+        <slot />
       </div>
     </div>
   </div>
@@ -97,6 +95,7 @@ const props = defineProps({
 
   .modal_body {
     padding-right: 20px;
+    height: 100%;
     overflow: auto;
   }
 
