@@ -4,52 +4,18 @@
 <script setup>
 import { computed, toRefs } from 'vue';
 const props = defineProps({
-  type: {
-    type: String,
-    required: true,
-  },
-  data: {
+  series: {
     type: Array,
     required: true,
   },
 });
 
-const { type, data } = toRefs(props);
-
-const chartValues = {
-  temperature: {
-    yLabel: '{value}°',
-  },
-  airUtilTx: {
-    yLabel: '{value}',
-  },
-  batteryLevel: {
-    yLabel: '{value}',
-  },
-  channelUtilization: {
-    yLabel: '{value}',
-  },
-  voltage: {
-    yLabel: '{value}',
-  },
-  barometricPressure: {
-    yLabel: '{value}',
-  },
-  current: {
-    yLabel: '{value}',
-  },
-  gasResistance: {
-    yLabel: '{value}',
-  },
-  relativeHumidity: {
-    yLabel: '{value}',
-  },
-};
+const { series } = toRefs(props);
 
 const chartOptions = computed(() => ({
-  // chart: {
-  //   type: 'spline'
-  // },
+  chart: {
+    type: 'line'
+  },
   title: {
     text: '',
   },
@@ -61,7 +27,7 @@ const chartOptions = computed(() => ({
       text: '',
     },
     labels: {
-      format: chartValues[type.value].yLabel,
+      format: '{value}',
     }
   },
   tooltip: {
@@ -70,18 +36,11 @@ const chartOptions = computed(() => ({
   },
   plotOptions: {
     spline: {
-      // dataLabels: { 
-      //   enabled: true
-      // },
       marker: {
         radius: 4
-      //   lineColor: '#666666',
-      //   lineWidth: 1
       }
     }
   },
-  series: [{
-    data: data.value,
-  }]
+  series: series.value,
 }));
 </script>
