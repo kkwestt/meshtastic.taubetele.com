@@ -102,8 +102,8 @@ const chartSeries = computed(() => {
 const fetcData = async () => {
   try {
     const [responseDeviceMetrics, responseEnvironmentMetrics] = await Promise.all([
-      fetch(`/deviceMetrics:${nodeId.value}`),
-      fetch(`/environmentMetrics:${nodeId.value}`),
+      fetch(`https://meshtasticback.taubetele.com/deviceMetrics:${nodeId.value}`),
+      fetch(`https://meshtasticback.taubetele.com/environmentMetrics:${nodeId.value}`),
     ]);
 
     const deviceMetrics = await responseDeviceMetrics.json();
@@ -125,14 +125,14 @@ onMounted(() => {
 .charts-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 98%;
 }
 
 .charts-container {
   flex-grow: 1;
 
   .hc {
-    height: 100%;
+    height: 98%;
   }
 }
 

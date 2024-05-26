@@ -30,7 +30,7 @@ const props = defineProps({
   title: String,
   maxWidth: {
     type: Number,
-    default: 500,
+    default: 600,
   },
   fullWidth: {
     type: Boolean,
@@ -57,29 +57,24 @@ const props = defineProps({
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    max-height: 90vh;
+    max-height: 98vh;
     display: flex;
     flex-direction: column;
     z-index: 1300;
-    width: 60%;
-    max-width: 500px;
-    width: 75%;
-    max-width: 500px;
+    width: 98%;
+    max-width: 1000px;
     background-color: rgb(255, 255, 255);
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     border-radius: 5px;
     padding: 10px 20px;
 
     &.full-height {
-      height: 100vh;
-      max-height: 100vh !important;
+      height: 98vh;
+      max-height: 98vh !important;
     }
 
     &.full-width {
-      width: 100vw;
-      max-width: 100vw !important;
+      width: 98vw;
+      max-width: 98vw !important;
     }
   }
 
