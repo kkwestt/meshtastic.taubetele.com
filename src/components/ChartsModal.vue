@@ -128,8 +128,8 @@ onMounted(async () => {
 
   timeOutId.value = setTimeout(async function run() {
     await fetcData();
-    timeOutId.value = setTimeout(run, 2000);
-  }, 2000);
+    timeOutId.value = setTimeout(run, 30000);
+  }, 30000);
 });
 </script>
 <style lang="scss">
