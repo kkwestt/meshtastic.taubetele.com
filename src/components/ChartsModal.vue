@@ -33,7 +33,7 @@
   </modal>
 </template>
 <script setup>
-import { onMounted, toRefs, ref, computed } from "vue";
+import { onMounted, toRefs, ref, computed, onUnmounted } from "vue";
 import Modal from './Modal.vue';
 import Charts from './Charts.vue';
 
@@ -43,6 +43,8 @@ const props = defineProps({
     required: true,
   }
 });
+
+const timeOutId = ref();
 
 const titles = {
   device: 'Device',
@@ -117,8 +119,17 @@ const fetcData = async () => {
   }
 }
 
-onMounted(() => {
-  fetcData();
+onUnmounted(() => {
+  clearTimeout(timeOutId.value);
+})
+
+onMounted(async () => {
+  await fetcData();
+
+  timeOutId.value = setTimeout(async function run() {
+    await fetcData();
+    timeOutId.value = setTimeout(run, 2000);
+  }, 2000);
 });
 </script>
 <style lang="scss">
