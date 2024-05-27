@@ -3,6 +3,7 @@
     @infoOpen="handleInfoOpen"
     @tableOpen="handleTableOpen"
     @chartOpen="handleChartOpen"
+    :center="mapCenter"
     :devices="devices"
   />
   <modal v-if="shouldShowInfoModal" title="Info" @close="handleInfoClose">
@@ -79,14 +80,24 @@
                 <span v-else>{{ device }} </span>
               </span>
               <button
-              class="chart-button"
-              type="button"
-              data-node-id="${nodeId}"
+                class="chart-button"
+                type="button"
+                v-if="devices[device]?.position?.from"
+                :data-node-id="
+                  devices[device]?.user?.from ||
+                  devices[device]?.position?.from ||
+                  devices[device]?.deviceMetrics?.from ||
+                  devices[device]?.message?.from ||
+                  devices[device]?.routing?.from"
+                @click="handleChartButtonClick"
               ><svg xmlns="http://www.w3.org/2000/svg" height="1.4em" viewBox="0 0 448 512"><path d="M160 80c0-26.5 21.5-48 48-48h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V80zM0 272c0-26.5 21.5-48 48-48H80c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V272zM368 96h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H368c-26.5 0-48-21.5-48-48V144c0-26.5 21.5-48 48-48z" fill="currentColor" /></svg></button>
               
               <button 
-              v-if="devices[device]?.position?.from"
-              type="button"
+                type="button"
+                v-if="devices[device]?.position?.from"
+                :data-latitude="devices[device]?.position?.data?.latitudeI / 10000000"
+                :data-longitude="devices[device]?.position?.data?.longitudeI / 10000000"
+                @click="handleLocationClick"
               ><svg height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20.992,9.98A8.991,8.991,0,0,0,3.01,9.932a13.95,13.95,0,0,0,8.574,12.979A1,1,0,0,0,12,23a1.012,1.012,0,0,0,.419-.09A13.948,13.948,0,0,0,20.992,9.98ZM12,20.9A11.713,11.713,0,0,1,5.008,10a6.992,6.992,0,1,1,13.984,0c0,.021,0,.045,0,.065A11.7,11.7,0,0,1,12,20.9ZM14,10a2,2,0,1,1-2-2A2,2,0,0,1,14,10Z"/></svg></button>
             </div>
             <div v-if="((Math.round(Date.now() / 1000) - devices[device].timestamp) > 3600)" @click="addToFilter(devices[device].user?.data?.longName)" class="text-neutral-500 text-s "> Last heard: {{new Date(devices[device].timestamp * 1000).toLocaleString()}} </div>
@@ -308,6 +319,7 @@ import ChartsModal from "./components/ChartsModal.vue";
 
 const devices = ref();
 const chosenNodeId = ref();
+const mapCenter = ref();
 
 const shouldShowChartsModal = computed(() => Boolean(chosenNodeId.value));
 
@@ -344,6 +356,19 @@ onMounted(async () => {
 
 const handleChartOpen = (nodeId) => {
   chosenNodeId.value = nodeId;
+};
+
+const handleChartButtonClick = (event) => {
+  const { nodeId } = event.target.dataset;
+  if (nodeId) {
+    handleChartOpen(nodeId);
+  }
+};
+
+const handleLocationClick = (event) => {
+  const { latitude, longitude } = event.target.dataset;
+  handleTableClose();
+  mapCenter.value = [latitude, longitude];
 };
 
 /////////// filter
@@ -436,5 +461,9 @@ const timeAgo = (date) => {
 
 li {
   padding-left: 10px;
+}
+
+button svg {
+  pointer-events: none;
 }
 </style>

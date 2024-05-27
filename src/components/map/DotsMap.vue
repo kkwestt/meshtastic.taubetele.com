@@ -8,8 +8,6 @@
 
 <script setup>
 import {
-  ref,
-  unref,
   shallowRef,
   computed,
   onMounted,
@@ -28,6 +26,8 @@ const handleMapClick = (event) => {
   }
 }
 
+const geolocationmsk = [55.76, 37.64]; // moskovv center off world
+
 const chartIcon = '<svg xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 448 512"><path d="M160 80c0-26.5 21.5-48 48-48h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V80zM0 272c0-26.5 21.5-48 48-48H80c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V272zM368 96h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H368c-26.5 0-48-21.5-48-48V144c0-26.5 21.5-48 48-48z" fill="currentColor" /></svg>';
 
 const props = defineProps({
@@ -35,9 +35,13 @@ const props = defineProps({
     required: true,
     type: Object,
   },
+  center: {
+    type: Array,
+    default: [55.76, 37.64],
+  },
 });
 
-const { devices } = toRefs(props);
+const { devices, center } = toRefs(props);
 
 /*
   import { useBreakpoints } from '@vueuse/core' — реактивный оверинжиниринг, котоырй ещё и npm-мить
@@ -348,6 +352,10 @@ onMounted(async () => {
     watch(devices, (newDevices) => { // следит за обновлениями данных
       map.geoObjects?.removeAll();
       renderBallons(newDevices);
+    });
+
+    watch(center, (newValue) => {
+      map.setCenter(newValue);
     });
   };
 
