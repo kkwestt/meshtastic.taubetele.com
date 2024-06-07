@@ -52,9 +52,27 @@ const timeAgo = (date) => {
 // const server = useServer()
 
 onMounted(async () => {
-  let geolocationmsk = [55.76, 37.64]; // moskovv center off world
-  let map;
+  let geolocationmsk;
+  const fetchCoordinates = () => {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          geolocationmsk = [position.coords.latitude, position.coords.longitude];
+          resolve();
+        },
+        (error) => {
+          console.error("Error fetching coordinates:", error);
+	  geolocationmsk = [55.76, 37.64]; // moskovv center off world
+          resolve();
+        }
+      );
+    });
+  };
 
+  try {
+    await fetchCoordinates();
+    // Once the coordinates are fetched, proceed with initializing the map
+    let map;
   const renderSelfBallon = () => {
     let geolocation = ymaps.geolocation;
 
@@ -409,6 +427,9 @@ onMounted(async () => {
   };
 
   ymaps.ready(init);
+  } catch (error) {
+    console.error("Error fetching coordinates:", error);
+  }
 });
 
 const filter = shallowRef("");
