@@ -16,13 +16,13 @@ Before start it, run redis docker container + back (api.meshtastic.taubetele.com
 - [x] Diveces data list
     - [x] Search
     - [x] Button > modal window > readeble table
-    - [ ] Beautify (people readeble table)
+    - [x] Beautify (people readeble table)
 - [x] Telegram bot forwards public messages
     - [ ] add some reciver
 - [x] Show MQTT connected node's
 - [x] Show points in the window only, do not draw unnecessary
 - [x] Background update by timer 20s
-- [ ] Telemetry charts
+- [x] Telemetry charts
 	- [x] collect telemetry data
 	- [x] returns data on request
 - [ ] GPS track by node
