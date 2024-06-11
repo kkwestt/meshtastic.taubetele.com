@@ -3,6 +3,7 @@
     @infoOpen="handleInfoOpen"
     @tableOpen="handleTableOpen"
     @chartOpen="handleChartOpen"
+    @showOldButton="handleShowOldButton"
     :center="mapCenter"
     :devices="devices"
   />
@@ -88,7 +89,11 @@
         <div class="cursor-pointer select-none">
           <div
             class="text-xl flex gap-1.5 cursor-pointer"
-            @click="devices[device].opened = !devices[device].opened"
+            @click="
+              (devices[device].opened = !devices[device].opened),
+                (tableOpenedDevices[device] = true),
+                console.log(device)
+            "
           >
             <span
               :class="
@@ -679,14 +684,26 @@ const devices = ref();
 const chosenNodeId = ref();
 const mapCenter = ref();
 
+let tableOpenedDevices = {};
+
 const shouldShowChartsModal = computed(() => Boolean(chosenNodeId.value));
 
 const handleChartsModalClose = () => {
   chosenNodeId.value = null;
 };
 
-const fetchDevices = () =>
-  fetch("https://meshtasticback.taubetele.com/api")
+let serverSelector = false;
+
+const serverMain = "https://meshtasticback.taubetele.com/api";
+const serverAll = "https://meshtasticback.taubetele.com";
+
+// const serverMain = "http://localhost/api";
+// const serverAll = "http://localhost";
+
+const fetchDevices = () => {
+  const url = serverSelector ? serverAll : serverMain;
+
+  return fetch(url)
     .then((response) => {
       if (!response.ok) {
         throw new Error("Network response was not ok");
@@ -697,12 +714,14 @@ const fetchDevices = () =>
       const names = Object.keys(json);
       names.forEach((name) => {
         json[name].timestamp = new Date(json[name].timestamp).getTime() / 1000;
+        if (tableOpenedDevices[name]) json[name].opened = true;
       });
       devices.value = json;
     })
     .catch(() => {
       console.log("cannot fetch");
     });
+};
 
 onMounted(async () => {
   await fetchDevices();
@@ -728,6 +747,12 @@ const handleLocationClick = (event) => {
   const { latitude, longitude } = event.target.dataset;
   handleTableClose();
   mapCenter.value = [latitude, longitude];
+};
+
+const handleShowOldButton = (nodeId) => {
+  console.log("OLD Button");
+  serverSelector = !serverSelector;
+  fetchDevices();
 };
 
 /////////// filter
@@ -793,6 +818,7 @@ const handleTableOpen = () => {
 };
 
 const handleTableClose = () => {
+  tableOpenedDevices = {};
   shouldShowTableModal.value = false;
 };
 

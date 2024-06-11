@@ -62,6 +62,7 @@ const timeAgo = (date) => {
 onMounted(async () => {
   let geolocationmsk = [55.76, 37.64]; // moskovv center off world
   let map;
+  let openedNodeId;
 
   const renderSelfBallon = () => {
     let geolocation = ymaps.geolocation;
@@ -308,34 +309,66 @@ onMounted(async () => {
         balloonContents += `</div>`;
       }
 
-      placemarks.push(
-        new window.ymaps.Placemark(
-          [latitude, longitude],
-          {
-            iconContent: name,
-            balloonContentHeader: `
+      const placemark = new window.ymaps.Placemark(
+        [latitude, longitude],
+        {
+          iconContent: name,
+          balloonContentHeader: `
               <div>Short Name: ${device?.user?.data?.shortName}</div>
               <div>Long Name: ${device?.user?.data?.longName}</div>`,
-            balloonContentBody: `
+          balloonContentBody: `
               <div>Node ID: ${device?.user?.data?.id} (${nodeId})</div>
               <div>Hardware: ${device?.user?.data?.hwModel}</div>
               <div>Role: ${device?.user?.data?.role}</div>
               <hr>
               <div>Position: <a href="yandexmaps://maps.yandex.ru/?ll=${latitude},${longitude}&z=12"> ${latitude}, ${longitude}, ${
-              altitude > 0 || altitude < 9000 ? altitude : 0
-            }m</a></div>
+            altitude > 0 || altitude < 9000 ? altitude : 0
+          }m</a></div>
 
               <div> ${balloonContents}</div>`,
-            balloonContentFooter: `Updated: ${timestampfooter}`,
-            clusterCaption: `Node: <strong>${name}</strong>`,
-          },
-          { preset: `${presetcolor}` }
-        )
+          balloonContentFooter: `Updated: ${timestampfooter}`,
+          clusterCaption: `Node: <strong>${name}</strong>`,
+          nodeId,
+        },
+        { preset: `${presetcolor}` }
       );
+
+      const getPlacemarkNodeId = (event) =>
+        event.originalEvent.currentTarget.properties._data.nodeId;
+
+      placemark.events.add("balloonopen", (event) => {
+        const nodeId = getPlacemarkNodeId(event);
+        openedNodeId = nodeId;
+        console.log("!!! balloonopen", openedNodeId);
+      });
+
+      // placemark.events.add("balloonclose", (event) => {
+      //   const nodeId = getPlacemarkNodeId(event);
+      //   console.log("!!! event:balloonclose", event, nodeId);
+      // });
+
+      placemarks.push(placemark);
     }
 
     if (state.zoom > 8) {
-      placemarks.forEach((p) => map.geoObjects.add(p));
+      placemarks.forEach((p) => {
+        const res = map.geoObjects.add(p);
+
+        if (openedNodeId && p.properties._data.nodeId === openedNodeId) {
+          const length = map.geoObjects.getLength();
+          const geometryObject = map.geoObjects.get(length - 1);
+
+          geometryObject.balloon.events.add("beforeuserclose", () => {
+            console.log("!!! beforeuserclose", openedNodeId);
+            openedNodeId = null;
+          });
+
+          geometryObject.balloon.open(undefined, undefined, {
+            balloonAutoPan: false,
+          });
+        }
+      });
+
       return;
     }
 
@@ -350,7 +383,12 @@ onMounted(async () => {
     });
 
     clusterer.add(placemarks);
+
     map.geoObjects.add(clusterer);
+
+    // if (window.openedNodeId && window.openedNodeId === nodeId) {
+    // placemark.o
+    // }
   };
 
   const initYMap = () => {
@@ -361,24 +399,33 @@ onMounted(async () => {
     map.controls.remove("fullscreenControl");
     map.controls.remove("searchControl");
 
+    let tabletButton = new ymaps.control.Button("NODES");
+    map.controls.add(tabletButton, {
+      selectOnClick: false,
+      float: "left",
+      floatIndex: 2,
+    });
+    tabletButton.events.add("click", function () {
+      emit("tableOpen");
+    });
+
     let infoButton = new ymaps.control.Button("INFO");
     map.controls.add(infoButton, {
       selectOnClick: false,
       float: "left",
-      floatIndex: 0,
+      floatIndex: 1,
     });
     infoButton.events.add("click", function () {
       emit("infoOpen");
     });
 
-    let tabletButton = new ymaps.control.Button("NODES");
-    map.controls.add(tabletButton, {
-      selectOnClick: false,
+    let showOldButton = new ymaps.control.Button("Show OLD");
+    map.controls.add(showOldButton, {
       float: "left",
-      floatIndex: 1,
+      floatIndex: 0,
     });
-    tabletButton.events.add("click", function () {
-      emit("tableOpen");
+    showOldButton.events.add("click", function () {
+      emit("showOldButton");
     });
 
     const onBoundsChange = (e) => {
