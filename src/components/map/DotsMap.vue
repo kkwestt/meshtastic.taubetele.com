@@ -315,45 +315,45 @@ onMounted(async () => {
         }
         balloonContents += `</div>`;
       }
-      balloonContents += `<table border=0>`;
+      balloonContents += `<table cellspacing="0" border="0"><tbody border=0>`;
       balloonContents += `<TR><TD>&nbsp</TD><TD>RSSI</TD><TD>SNR</TD><TD>Hop's</TD><TD>Time</TD></TR>`;
 
       balloonContents += `<TR><TD>Node Info: </TD>
         <TD>${Number(device?.user?.rxRssi)}</TD>
         <TD>${Number(device?.user?.rxSnr)}</TD>
         <TD>${Number(device?.user?.hopLimit)}</TD>
-        <TD><iii style="color:grey;"> (${timeAgo(
+        <TD style="color:grey;"> (${timeAgo(
           new Date(device?.user?.serverTime).getTime()
-        )})</iii></TD>
+        )})</TD>
       </TR>`;
 
       balloonContents += `<TR><TD>Position: </TD>
         <TD>${Number(device?.position?.rxRssi)}</TD>
         <TD>${Number(device?.position?.rxSnr)}</TD>
         <TD>${Number(device?.position?.hopLimit)}</TD>
-        <TD><iii style="color:grey;"> (${timeAgo(
+        <TD style="color:grey;"> (${timeAgo(
           new Date(device?.position?.serverTime).getTime()
-        )})</iii></TD>
+        )})</TD>
       </TR>`;
 
       balloonContents += `<TR><TD>Device Metrics: </TD>
         <TD>${Number(device?.deviceMetrics?.rxRssi)}</TD>
         <TD>${Number(device?.deviceMetrics?.rxSnr)}</TD>
         <TD>${Number(device?.deviceMetrics?.hopLimit)}</TD>
-        <TD><iii style="color:grey;"> (${timeAgo(
+        <TD style="color:grey;"> (${timeAgo(
           new Date(device?.deviceMetrics?.serverTime).getTime()
-        )})</iii></TD>
+        )})</TD>
       </TR>`;
 
       balloonContents += `<TR><TD>Environment<br>Metrics: </TD>
         <TD>${Number(device?.environmentMetrics?.rxRssi)}</TD>
         <TD>${Number(device?.environmentMetrics?.rxSnr)}</TD>
         <TD>${Number(device?.environmentMetrics?.hopLimit)}</TD>
-        <TD><iii style="color:grey;"> (${timeAgo(
+        <TD style="color:grey;"> (${timeAgo(
           new Date(device?.environmentMetrics?.serverTime).getTime()
-        )})</iii></TD>
+        )})</TD>
       </TR>`;
-      balloonContents += `</table>`;
+      balloonContents += `</tbody></table>`;
 
       const placemark = new window.ymaps.Placemark(
         [latitude, longitude],
@@ -385,7 +385,7 @@ onMounted(async () => {
       placemark.events.add("balloonopen", (event) => {
         const nodeId = getPlacemarkNodeId(event);
         openedNodeId = nodeId;
-        console.log("!!! balloonopen", openedNodeId);
+        // console.log("!!! balloonopen", openedNodeId);
       });
 
       // placemark.events.add("balloonclose", (event) => {
@@ -405,7 +405,7 @@ onMounted(async () => {
           const geometryObject = map.geoObjects.get(length - 1);
 
           geometryObject.balloon.events.add("beforeuserclose", () => {
-            console.log("!!! beforeuserclose", openedNodeId);
+            // console.log("!!! beforeuserclose", openedNodeId);
             openedNodeId = null;
           });
 
