@@ -2,7 +2,7 @@
   <highcharts class="hc" :options="chartOptions" ref="chart"></highcharts>
 </template>
 <script setup>
-import { computed, toRefs } from 'vue';
+import { computed, toRefs } from "vue";
 const props = defineProps({
   series: {
     type: Array,
@@ -14,32 +14,32 @@ const { series } = toRefs(props);
 
 const chartOptions = computed(() => ({
   chart: {
-    type: 'line'
+    type: "line",
   },
   title: {
-    text: '',
+    text: "",
   },
   xAxis: {
-    type: 'datetime'
+    type: "datetime",
   },
   yAxis: {
     title: {
-      text: '',
+      text: "",
     },
     labels: {
-      format: '{value}',
-    }
+      format: "{value}",
+    },
   },
   tooltip: {
     crosshairs: true,
-    shared: true
+    shared: true,
   },
   plotOptions: {
     spline: {
       marker: {
-        radius: 4
-      }
-    }
+        radius: 4,
+      },
+    },
   },
   series: series.value,
 }));
