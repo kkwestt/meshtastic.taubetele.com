@@ -59,6 +59,7 @@ const timeAgo = (date) => {
 
 // const server = useServer()
 
+let centerMapOnce = true;
 onMounted(async () => {
   let geolocationmsk = [55.76, 37.64]; // moskovv center off world
   let map;
@@ -78,12 +79,15 @@ onMounted(async () => {
           .get(0)
           .properties.set({ balloonContentBody: "Are you here?" });
         map.geoObjects.add(result.geoObjects);
-        map.setCenter(result.geoObjects.get(0).geometry.getCoordinates(), 10);
+        if (centerMapOnce) {
+          map.setCenter(result.geoObjects.get(0).geometry.getCoordinates(), 10);
+          centerMapOnce = false;
+        }
       });
   };
 
   const renderBallons = (devices) => {
-    // renderSelfBallon(); // либо я двигаюсь в онлайне, либо она тебя заебет
+    renderSelfBallon(); // либо я двигаюсь в онлайне, либо она тебя заебет
 
     const placemarks = [];
 
@@ -164,13 +168,16 @@ onMounted(async () => {
           device?.environmentMetrics?.data?.environmentMetrics
             ?.barometricPressure
         )} <iii style="color:grey;">hPa </iii>`;
-      if (environmentMetrics?.gasResistance)
-        balloonContents += `<div>Gas Resistance (AQI): ${Number(
-          device?.environmentMetrics?.data?.environmentMetrics?.gasResistance
-        ).toFixed(0)} <iii style="color:grey;"> MOhms </iii></div>`;
+      // if (environmentMetrics?.gasResistance)
+      //   balloonContents += `<div>Gas Resistance (AQI): ${Number(
+      //     device?.environmentMetrics?.data?.environmentMetrics?.gasResistance
+      //   ).toFixed(0)} <iii style="color:grey;"> MOhms </iii></div>`;
 
       const { deviceMetrics } = device?.deviceMetrics?.data || {};
-      if (deviceMetrics?.batteryLevel) {
+      if (
+        device?.deviceMetrics?.data?.deviceMetrics?.voltage > 2 ||
+        device?.deviceMetrics?.data?.deviceMetrics?.voltage < 6
+      ) {
         balloonContents += `<div>Battery: ${
           Number(
             device?.deviceMetrics?.data?.deviceMetrics?.batteryLevel
@@ -198,7 +205,7 @@ onMounted(async () => {
       if (
         device?.user?.rxRssi !== undefined &&
         device?.user?.rxSnr !== undefined &&
-        device?.user?.rxRssi !== 0
+        device?.user?.rxRssi !== 0 // 0 mean mqtt
       ) {
         balloonContents += `<div>
           Node Info RSSI: ${Math.round(device?.user?.rxRssi).toFixed(0)},
@@ -308,6 +315,45 @@ onMounted(async () => {
         }
         balloonContents += `</div>`;
       }
+      balloonContents += `<table border=0>`;
+      balloonContents += `<TR><TD>&nbsp</TD><TD>RSSI</TD><TD>SNR</TD><TD>Hop's</TD><TD>Time</TD></TR>`;
+
+      balloonContents += `<TR><TD>Node Info: </TD>
+        <TD>${Number(device?.user?.rxRssi)}</TD>
+        <TD>${Number(device?.user?.rxSnr)}</TD>
+        <TD>${Number(device?.user?.hopLimit)}</TD>
+        <TD><iii style="color:grey;"> (${timeAgo(
+          new Date(device?.user?.serverTime).getTime()
+        )})</iii></TD>
+      </TR>`;
+
+      balloonContents += `<TR><TD>Position: </TD>
+        <TD>${Number(device?.position?.rxRssi)}</TD>
+        <TD>${Number(device?.position?.rxSnr)}</TD>
+        <TD>${Number(device?.position?.hopLimit)}</TD>
+        <TD><iii style="color:grey;"> (${timeAgo(
+          new Date(device?.position?.serverTime).getTime()
+        )})</iii></TD>
+      </TR>`;
+
+      balloonContents += `<TR><TD>Device Metrics: </TD>
+        <TD>${Number(device?.deviceMetrics?.rxRssi)}</TD>
+        <TD>${Number(device?.deviceMetrics?.rxSnr)}</TD>
+        <TD>${Number(device?.deviceMetrics?.hopLimit)}</TD>
+        <TD><iii style="color:grey;"> (${timeAgo(
+          new Date(device?.deviceMetrics?.serverTime).getTime()
+        )})</iii></TD>
+      </TR>`;
+
+      balloonContents += `<TR><TD>Environment<br>Metrics: </TD>
+        <TD>${Number(device?.environmentMetrics?.rxRssi)}</TD>
+        <TD>${Number(device?.environmentMetrics?.rxSnr)}</TD>
+        <TD>${Number(device?.environmentMetrics?.hopLimit)}</TD>
+        <TD><iii style="color:grey;"> (${timeAgo(
+          new Date(device?.environmentMetrics?.serverTime).getTime()
+        )})</iii></TD>
+      </TR>`;
+      balloonContents += `</table>`;
 
       const placemark = new window.ymaps.Placemark(
         [latitude, longitude],
@@ -546,6 +592,10 @@ const servers = computed(() => {
   @apply pl-3;
   @apply border-b;
   @apply bg-neutral-100;
+}
+
+.padThisCell {
+  padding: 0px;
 }
 
 .text-breakpoints {
