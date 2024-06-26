@@ -64,9 +64,8 @@ const props = defineProps({
   padding: 10px 20px;
 
   &.full-height {
-    height: 92vh;
-    margin: 1.5rem auto;
-    max-height: 96vh !important;
+    height: calc(var(--vh) * 96);
+    max-height: calc(var(--vh)* 96) !important;
   }
 
   &.full-width {

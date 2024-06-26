@@ -679,6 +679,7 @@ import { ref, onMounted, computed, shallowRef } from "vue";
 import Modal from "./components/Modal.vue";
 import DotsMap from "./components/map/DotsMap.vue";
 import ChartsModal from "./components/ChartsModal.vue";
+import { useGetVh } from "./hooks/useGetVh";
 
 const devices = ref();
 const chosenNodeId = ref();
@@ -725,6 +726,7 @@ const fetchDevices = () => {
 
 onMounted(async () => {
   await fetchDevices();
+  useGetVh();
 
   setTimeout(async function run() {
     await fetchDevices();
@@ -840,6 +842,10 @@ const timeAgo = (date) => {
 };
 </script>
 <style lang="scss">
+:root {
+  --vh: 1vh;
+}
+
 .filter-wrapper {
   position: sticky;
   top: 0;
