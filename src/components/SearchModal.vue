@@ -1,0 +1,716 @@
+<template>
+  <div class="search-modal-overlay" @click="handleOverlayClick">
+    <div class="search-modal" @click.stop>
+      <div class="search-modal-header">
+        <h2>🔍 Поиск устройств</h2>
+        <button class="close-button" @click="$emit('close')">×</button>
+      </div>
+
+      <div class="search-input-container">
+        <input
+          v-model="searchQuery"
+          @input="handleSearch"
+          @keyup.enter="performSearch"
+          type="text"
+          placeholder="Поиск по ID, hex ID, long name, short name..."
+          class="search-input"
+        />
+        <button @click="performSearch" class="search-button">🔍</button>
+      </div>
+
+      <div class="search-results" v-if="searchResults.length > 0">
+        <div class="results-header">
+          <h3>Результаты поиска ({{ searchResults.length }})</h3>
+          <button @click="clearResults" class="clear-button">Очистить</button>
+        </div>
+
+        <div class="results-list">
+          <div
+            v-for="device in searchResults"
+            :key="getDeviceKey(device)"
+            class="device-item"
+            @click="selectDevice(device)"
+          >
+            <div class="device-header">
+              <span class="device-name">{{ getDeviceName(device) }}</span>
+              <span class="device-short">{{ getDeviceShortName(device) }}</span>
+            </div>
+            <div class="device-details">
+              <span class="device-id">ID: {{ getDeviceId(device) }}</span>
+              <span class="device-time">{{ formatTime(device.s_time) }}</span>
+            </div>
+            <!-- Отладочная информация -->
+            <div
+              class="device-debug"
+              style="font-size: 0.75rem; color: #666; margin-top: 4px"
+            >
+              Debug:
+              {{
+                JSON.stringify({
+                  device_id: device?.device_id,
+                  hex_id: device?.hex_id,
+                  id: device?.id,
+                })
+              }}
+            </div>
+            <div class="device-location" v-if="hasValidLocation(device)">
+              📍 {{ formatCoordinate(device.latitude) }},
+              {{ formatCoordinate(device.longitude) }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="no-results" v-else-if="hasSearched && searchQuery.length > 0">
+        <p>🔍 Устройства не найдены</p>
+        <p class="search-tip">
+          Попробуйте изменить запрос или использовать другие параметры
+        </p>
+      </div>
+
+      <div class="search-tips" v-if="!hasSearched">
+        <h3>💡 Подсказки по поиску:</h3>
+        <ul>
+          <li><strong>ID:</strong> 12345678</li>
+          <li><strong>Hex ID:</strong> 240d19b</li>
+          <li><strong>Long Name:</strong> LONGNAME</li>
+          <li><strong>Short Name:</strong> NAME</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from "vue";
+
+const emit = defineEmits(["close", "selectDevice"]);
+
+const searchQuery = ref("");
+const searchResults = ref([]);
+const hasSearched = ref(false);
+
+// Получаем устройства из родительского компонента
+const props = defineProps({
+  devices: {
+    type: Object,
+    required: true,
+  },
+});
+
+const handleSearch = () => {
+  if (searchQuery.value.length < 2) {
+    searchResults.value = [];
+    hasSearched.value = false;
+    return;
+  }
+
+  performSearch();
+};
+
+const performSearch = () => {
+  if (searchQuery.value.length < 2) return;
+
+  const query = searchQuery.value.toLowerCase();
+  const results = [];
+
+  // Отладочная информация для первого устройства
+  let firstDeviceLogged = false;
+
+  // Логируем общее количество устройств
+  console.log("Всего устройств для поиска:", Object.keys(props.devices).length);
+  console.log("Запрос поиска:", query);
+
+  // Поиск по всем устройствам
+  for (const deviceId in props.devices) {
+    const device = props.devices[deviceId];
+
+    // Проверяем, что устройство существует и является объектом
+    if (!device || typeof device !== "object") {
+      continue;
+    }
+
+    // Логируем структуру первого устройства для отладки
+    if (!firstDeviceLogged) {
+      console.log("Структура первого устройства:", {
+        deviceId,
+        device,
+        allKeys: Object.keys(device),
+        hasHexId: "hex_id" in device,
+        hasDeviceId: "device_id" in device,
+        hasId: "id" in device,
+        hexIdValue: device.hex_id,
+        deviceIdValue: device.device_id,
+        idValue: device.id,
+        longNameType: typeof device.longName,
+        longNameValue: device.longName,
+        shortNameType: typeof device.shortName,
+        shortNameValue: device.shortName,
+        long_nameType: typeof device.long_name,
+        long_nameValue: device.long_name,
+        short_nameType: typeof device.short_name,
+        short_nameValue: device.short_name,
+      });
+      firstDeviceLogged = true;
+    }
+
+    try {
+      // Поиск по ID (числовой)
+      if (device.device_id && device.device_id.toString().includes(query)) {
+        console.log(
+          "Найдено по device_id:",
+          device.device_id,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      // Поиск по hex ID
+      if (device.hex_id && device.hex_id.toLowerCase().includes(query)) {
+        console.log(
+          "Найдено по hex_id:",
+          device.hex_id,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      // Поиск по hex ID без префикса !
+      if (
+        device.hex_id &&
+        device.hex_id.toLowerCase().replace("!", "").includes(query)
+      ) {
+        console.log(
+          "Найдено по hex_id (без !):",
+          device.hex_id,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      // Поиск по числовому ID (ключ объекта) в hex формате
+      try {
+        const deviceIdHex = parseInt(deviceId).toString(16);
+        if (deviceIdHex.includes(query.toLowerCase())) {
+          console.log(
+            "Найдено по deviceId (hex):",
+            deviceIdHex,
+            "для устройства:",
+            deviceId
+          );
+          results.push(device);
+          continue;
+        }
+      } catch (e) {
+        // Игнорируем ошибки конвертации
+      }
+
+      // Поиск по числовому ID в десятичном формате, если запрос - hex
+      if (/^[0-9a-f]+$/i.test(query)) {
+        try {
+          const queryDecimal = parseInt(query, 16);
+          if (
+            deviceId == queryDecimal ||
+            device.device_id == queryDecimal ||
+            device.id == queryDecimal
+          ) {
+            console.log(
+              "Найдено по hex запросу в десятичном формате:",
+              query,
+              "->",
+              queryDecimal,
+              "для устройства:",
+              deviceId
+            );
+            results.push(device);
+            continue;
+          }
+        } catch (e) {
+          // Игнорируем ошибки конвертации
+        }
+      }
+
+      // Поиск по long name
+      if (
+        device.longName &&
+        typeof device.longName === "string" &&
+        device.longName.toLowerCase().includes(query)
+      ) {
+        console.log(
+          "Найдено по longName:",
+          device.longName,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      // Поиск по short name
+      if (
+        device.shortName &&
+        typeof device.shortName === "string" &&
+        device.shortName.toLowerCase().includes(query)
+      ) {
+        console.log(
+          "Найдено по shortName:",
+          device.shortName,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      // Поиск по альтернативным полям
+      if (
+        device.long_name &&
+        typeof device.long_name === "string" &&
+        device.long_name.toLowerCase().includes(query)
+      ) {
+        console.log(
+          "Найдено по long_name:",
+          device.long_name,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      if (
+        device.short_name &&
+        typeof device.short_name === "string" &&
+        device.short_name.toLowerCase().includes(query)
+      ) {
+        console.log(
+          "Найдено по short_name:",
+          device.short_name,
+          "для устройства:",
+          deviceId
+        );
+        results.push(device);
+        continue;
+      }
+
+      if (device.id && device.id.toString().includes(query)) {
+        console.log("Найдено по id:", device.id, "для устройства:", deviceId);
+        results.push(device);
+        continue;
+      }
+
+      // Дополнительный поиск по всем строковым полям
+      for (const [key, value] of Object.entries(device)) {
+        if (typeof value === "string" && value.toLowerCase().includes(query)) {
+          console.log(
+            "Найдено по полю",
+            key,
+            ":",
+            value,
+            "для устройства:",
+            deviceId
+          );
+          results.push(device);
+          break;
+        }
+      }
+    } catch (error) {
+      console.warn("Ошибка при поиске по устройству:", deviceId, error);
+      continue;
+    }
+  }
+
+  console.log("Результаты поиска для запроса:", query, results);
+
+  // Добавляем отладочную информацию для каждого найденного устройства
+  results.forEach((device, index) => {
+    console.log(`Устройство ${index + 1}:`, {
+      device,
+      allKeys: Object.keys(device),
+      deviceId: device?.device_id,
+      hexId: device?.hex_id,
+      id: device?.id,
+      longName: device?.longName || device?.long_name,
+      shortName: device?.shortName || device?.short_name,
+    });
+  });
+
+  searchResults.value = results;
+  hasSearched.value = true;
+};
+
+const clearResults = () => {
+  searchResults.value = [];
+  hasSearched.value = false;
+  searchQuery.value = "";
+};
+
+const selectDevice = (device) => {
+  // Проверяем, есть ли у устройства валидные координаты
+  if (hasValidLocation(device)) {
+    const coordinates = {
+      latitude: Number(device.latitude),
+      longitude: Number(device.longitude),
+      device: device,
+    };
+    console.log("Выбрано устройство с координатами:", coordinates);
+    emit("selectDevice", coordinates);
+  } else {
+    console.log("Выбрано устройство без координат:", device);
+    emit("selectDevice", { device: device });
+  }
+  emit("close");
+};
+
+const handleOverlayClick = () => {
+  emit("close");
+};
+
+// Вспомогательные функции для безопасного получения свойств устройства
+const getDeviceKey = (device) => {
+  return device?.device_id || device?.hex_id || device?.id || "unknown";
+};
+
+const getDeviceName = (device) => {
+  return device?.longName || device?.long_name || "Без имени";
+};
+
+const getDeviceShortName = (device) => {
+  return device?.shortName || device?.short_name || "Без короткого имени";
+};
+
+const getDeviceId = (device) => {
+  // Сначала проверяем стандартные поля
+  if (device?.device_id) {
+    return `ID: ${device.device_id}`;
+  }
+  if (device?.hex_id) {
+    return `Hex: ${device.hex_id}`;
+  }
+  if (device?.id) {
+    return `ID: ${device.id}`;
+  }
+
+  // Если стандартные поля не найдены, возвращаем "Неизвестно"
+  console.warn("Не удалось найти ID для устройства:", {
+    device,
+    allKeys: Object.keys(device),
+    hasDeviceId: "device_id" in device,
+    hasHexId: "hex_id" in device,
+    hasId: "id" in device,
+    deviceIdValue: device?.device_id,
+    hexIdValue: device?.hex_id,
+    idValue: device?.id,
+  });
+
+  return "Неизвестно";
+};
+
+const hasValidLocation = (device) => {
+  return (
+    device?.latitude &&
+    device?.longitude &&
+    !isNaN(device.latitude) &&
+    !isNaN(device.longitude)
+  );
+};
+
+const formatCoordinate = (coord) => {
+  if (!coord || isNaN(coord)) return "0.0000";
+  return Number(coord).toFixed(4);
+};
+
+const formatTime = (timestamp) => {
+  try {
+    if (!timestamp || timestamp === "undefined" || timestamp === 0) {
+      return "Неизвестно";
+    }
+
+    const numTimestamp = Number(timestamp);
+    if (isNaN(numTimestamp)) {
+      return "Неизвестно";
+    }
+
+    let date;
+    if (Math.abs(numTimestamp) > 10000) {
+      date = new Date(numTimestamp);
+    } else {
+      date = new Date(numTimestamp * 1000);
+    }
+
+    if (isNaN(date.getTime())) {
+      return "Неизвестно";
+    }
+
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSeconds < 60) {
+      return `${diffSeconds} сек назад`;
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes} мин назад`;
+    } else if (diffHours < 24) {
+      return `${diffHours} ч назад`;
+    } else if (diffDays < 7) {
+      return `${diffDays} дн назад`;
+    } else {
+      return date.toLocaleDateString("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+  } catch (error) {
+    console.warn("Ошибка форматирования времени:", timestamp, error);
+    return "Неизвестно";
+  }
+};
+</script>
+
+<style lang="scss" scoped>
+.search-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.search-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.search-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+
+  h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .close-button {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #e5e7eb;
+      color: #374151;
+    }
+  }
+}
+
+.search-input-container {
+  display: flex;
+  padding: 20px 24px;
+  gap: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+}
+
+.search-button {
+  padding: 12px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background: #2563eb;
+  }
+}
+
+.search-results {
+  padding: 20px 24px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .clear-button {
+    padding: 6px 12px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #e5e7eb;
+    }
+  }
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.device-item {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #3b82f6;
+    background: #f8fafc;
+  }
+}
+
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+
+  .device-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
+  }
+
+  .device-short {
+    font-weight: 500;
+    color: #6b7280;
+    font-size: 0.875rem;
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+}
+
+.device-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+
+  .device-id {
+    color: #374151;
+    font-family: monospace;
+  }
+
+  .device-time {
+    color: #6b7280;
+  }
+}
+
+.device-location {
+  font-size: 0.875rem;
+  color: #059669;
+  font-weight: 500;
+}
+
+.no-results {
+  padding: 40px 24px;
+  text-align: center;
+  color: #6b7280;
+
+  p {
+    margin: 8px 0;
+  }
+
+  .search-tip {
+    font-size: 0.875rem;
+    color: #9ca3af;
+  }
+}
+
+.search-tips {
+  padding: 20px 24px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+
+  h3 {
+    margin: 0 0 12px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #6b7280;
+    font-size: 0.875rem;
+
+    li {
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+  }
+}
+</style>

@@ -35,7 +35,19 @@ import {
 import { debounce, isPointInBounds } from "../../utils/helpers.js";
 import { meshtasticApi } from "../../utils/api.js";
 
-const emit = defineEmits(["infoOpen", "devicesCount"]);
+const emit = defineEmits([
+  "infoOpen",
+  "devicesCount",
+  "searchOpen",
+  "focusOnDevice",
+]);
+
+const props = defineProps({
+  devices: {
+    type: Object,
+    default: () => ({}),
+  },
+});
 
 let map, openedNodeId;
 
@@ -764,10 +776,23 @@ const createBalloonContent = async (device, nodeId) => {
       let reverseTraceroute = null;
       try {
         if (rawData && rawData.route && rawData.route.length > 0) {
-          // Ищем traceroute в обратном направлении
+          console.log("Ищем обратный traceroute для:", {
+            from: latestTrace.from,
+            to: latestTrace.to,
+            fromHex: latestTrace.from.toString(16),
+            toHex: latestTrace.to.toString(16),
+          });
+
+          // Конвертируем hex ID в числовой для поиска
+          const toNodeId = parseInt(latestTrace.to.toString(16), 16);
+          console.log("Конвертированный toNodeId:", toNodeId);
+
+          // Ищем traceroute в обратном направлении по числовому ID
           const reverseTracerouteInfo = await meshtasticApi.getTracerouteInfo(
-            latestTrace.to.toString(16)
+            toNodeId.toString(16)
           );
+          console.log("Получен reverseTracerouteInfo:", reverseTracerouteInfo);
+
           if (
             reverseTracerouteInfo &&
             reverseTracerouteInfo.data &&
@@ -775,11 +800,29 @@ const createBalloonContent = async (device, nodeId) => {
           ) {
             // Ищем запись, где получатель = отправитель исходного traceroute
             for (const trace of reverseTracerouteInfo.data) {
+              console.log("Проверяем trace:", {
+                traceFrom: trace.from,
+                traceTo: trace.to,
+                targetFrom: latestTrace.from,
+              });
               if (trace.to === latestTrace.from) {
                 reverseTraceroute = trace;
+                console.log("Найден обратный traceroute:", reverseTraceroute);
                 break;
               }
             }
+          }
+
+          // Если не нашли через API, попробуем использовать route_back из исходных данных
+          if (
+            !reverseTraceroute &&
+            rawData.route_back &&
+            rawData.route_back.length > 0
+          ) {
+            console.log(
+              "Используем route_back из исходных данных:",
+              rawData.route_back
+            );
           }
         }
       } catch (error) {
@@ -851,8 +894,19 @@ const createBalloonContent = async (device, nodeId) => {
 
           backRouteDisplay = backParts.join(" → ");
         } else if (rawData.route_back && rawData.route_back.length > 0) {
-          // Fallback к старым данным route_back если есть
+          // Fallback к данным route_back если есть
+          console.log(
+            "Формируем обратный маршрут из route_back:",
+            rawData.route_back,
+            "snr_back:",
+            rawData.snr_back
+          );
           const backParts = [];
+
+          // Добавляем назначение исходного traceroute (откуда идет обратный маршрут)
+          backParts.push(`!${latestTrace.to.toString(16)}`);
+
+          // Добавляем промежуточные узлы с SNR
           for (let i = 0; i < rawData.route_back.length; i++) {
             const nodeHex = `!${rawData.route_back[i].toString(16)}`;
             const snr =
@@ -861,9 +915,15 @@ const createBalloonContent = async (device, nodeId) => {
                 : "";
             backParts.push(`${nodeHex}${snr}`);
           }
+
+          // Добавляем источник исходного traceroute (куда идет обратный маршрут)
+          backParts.push(`!${latestTrace.from.toString(16)}`);
+
           backRouteDisplay = backParts.join(" → ");
+          console.log("Сформирован backRouteDisplay:", backRouteDisplay);
         } else {
           backRouteDisplay = "нет маршрута";
+          console.log("Нет данных для обратного маршрута");
         }
 
         // Формируем компактную строку с метриками
@@ -875,13 +935,24 @@ const createBalloonContent = async (device, nodeId) => {
         if (latestTrace.hopLimit !== undefined)
           metrics.push(`Hops: ${latestTrace.hopLimit}`);
 
-        // Добавляем информацию о времени получения
-        if (latestTrace.rxTime) {
-          const rxTime = new Date(latestTrace.rxTime);
-          metrics.push(`RX: ${rxTime.toLocaleTimeString()}`);
-        }
-
         const metricsLine = metrics.join(" | ");
+
+        // Отладочная информация
+        console.log("Traceroute debug:", {
+          routeDisplay,
+          backRouteDisplay,
+          rawData: rawData,
+          reverseTraceroute: reverseTraceroute,
+        });
+
+        // Детальная отладка rawData
+        console.log("Детальная информация rawData:", {
+          route: rawData.route,
+          route_back: rawData.route_back,
+          snr_towards: rawData.snr_towards,
+          snr_back: rawData.snr_back,
+          decoded: rawData.decoded,
+        });
 
         tracerouteHtml = `
     <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
@@ -889,17 +960,17 @@ const createBalloonContent = async (device, nodeId) => {
       latestTrace.timestamp
     )}</div>
     <div style="font-size: 11px; line-height: 1.3;">
-    <div style="margin-bottom: 4px; font-weight: 500; color: #1976d2;">
+    <div style="margin-bottom: 4px; font-weight: 600; color: #1f2937;">
       От: !${latestTrace.from.toString(16)} → К: !${latestTrace.to.toString(16)}
     </div>
     ${
       routeDisplay
-        ? `<div style="margin-bottom: 2px; word-break: break-all;">🔄 Туда: ${routeDisplay}</div>`
+        ? `<div style="margin-bottom: 2px; word-break: break-all;">Туда: ${routeDisplay}</div>`
         : ""
     }
     ${
       backRouteDisplay !== "нет маршрута"
-        ? `<div style="margin-bottom: 2px;">🔄 Обратно: ${backRouteDisplay}</div>`
+        ? `<div style="margin-bottom: 2px;">Обратно: ${backRouteDisplay}</div>`
         : ""
     }
     ${
@@ -909,14 +980,7 @@ const createBalloonContent = async (device, nodeId) => {
     }
     ${
       latestTrace.gatewayId
-        ? `<div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">Gateway: ${
-            latestTrace.gatewayId
-          } ${
-            rawData.route &&
-            rawData.route.includes(parseInt(latestTrace.gatewayId.slice(1), 16))
-              ? "(в маршруте)"
-              : ""
-          }</div>`
+        ? `<div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">Gateway: ${latestTrace.gatewayId} </div>`
         : ""
     }
     ${
@@ -1377,14 +1441,14 @@ const fetchDevicesData = async () => {
     if (data && data.data) {
       devices.value = data.data;
       const count = Object.keys(data.data).length;
-      emit("devicesCount", count);
+      emit("devicesCount", count, data.data);
 
       if (typeof debouncedRenderBallons === "function") {
         debouncedRenderBallons(devices.value, false);
       }
     } else {
       devices.value = {};
-      emit("devicesCount", 0);
+      emit("devicesCount", 0, {});
     }
   } catch (error) {
     console.error("❌ Ошибка загрузки данных устройств:", error);
@@ -1404,7 +1468,7 @@ const fetchDevicesData = async () => {
     }
 
     devices.value = {};
-    emit("devicesCount", 0);
+    emit("devicesCount", 0, {});
 
     // Автоматически скрываем ошибку через 10 секунд
     setTimeout(() => {
@@ -1471,7 +1535,7 @@ const updateDevicesData = async () => {
     if (data && data.data) {
       devices.value = data.data;
       const count = Object.keys(data.data).length;
-      emit("devicesCount", count);
+      emit("devicesCount", count, data.data);
 
       if (typeof debouncedRenderBallons === "function") {
         debouncedRenderBallons(devices.value, true);
@@ -1500,6 +1564,10 @@ onMounted(async () => {
 
   onUnmounted(() => {
     stopDataUpdates();
+    // Очищаем глобальную функцию фокусировки
+    if (window.focusOnDevice) {
+      delete window.focusOnDevice;
+    }
   });
 
   const renderSelfBallon = (shouldSetCenter = false) => {
@@ -1598,6 +1666,46 @@ onMounted(async () => {
     );
   };
 
+  // Функция для фокусировки карты на устройстве
+  const focusOnDevice = (coordinates) => {
+    if (
+      !map ||
+      !coordinates ||
+      !coordinates.latitude ||
+      !coordinates.longitude
+    ) {
+      console.warn("Не удалось сфокусироваться на устройстве:", coordinates);
+      return;
+    }
+
+    try {
+      const coords = [coordinates.latitude, coordinates.longitude];
+      console.log("Фокусируем карту на устройстве:", coords);
+
+      // Центрируем карту на координатах устройства с увеличенным зумом
+      map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 2);
+
+      // Показываем статус успешной фокусировки
+      geolocationStatus.value = {
+        type: "success",
+        message: `📍 Карта сфокусирована на устройстве`,
+      };
+
+      // Автоматически скрываем статус через 3 секунды
+      setTimeout(() => {
+        if (geolocationStatus.value?.type === "success") {
+          geolocationStatus.value = null;
+        }
+      }, 3000);
+    } catch (error) {
+      console.error("Ошибка фокусировки на устройстве:", error);
+      geolocationStatus.value = {
+        type: "error",
+        message: "Ошибка фокусировки на устройстве",
+      };
+    }
+  };
+
   const initYMap = () => {
     map = new ymaps.Map("map", {
       center: MAP_CONFIG.DEFAULT_CENTER,
@@ -1616,7 +1724,17 @@ onMounted(async () => {
       emit("infoOpen");
     });
 
-    const onBoundsChange = () => {
+    let searchButton = new ymaps.control.Button("ПОИСК");
+    map.controls.add(searchButton, {
+      selectOnClick: false,
+      float: "left",
+      floatIndex: 2,
+    });
+    searchButton.events.add("click", function () {
+      emit("searchOpen");
+    });
+
+    const onBoundsChange = async () => {
       // Сохраняем информацию об открытом баллуне перед обновлением
       let openedBalloonInfo = null;
       let openedBalloonContent = null;
@@ -1664,6 +1782,33 @@ onMounted(async () => {
         }
       }
 
+      // Загружаем новые данные при изменении границ карты
+      try {
+        geolocationStatus.value = {
+          type: "warning",
+          message: "🔄 Загрузка новых данных...",
+        };
+        await fetchDevicesData();
+        // Скрываем статус загрузки через 2 секунды
+        setTimeout(() => {
+          if (geolocationStatus.value?.type === "warning") {
+            geolocationStatus.value = null;
+          }
+        }, 2000);
+      } catch (error) {
+        geolocationStatus.value = {
+          type: "error",
+          message: "❌ Ошибка загрузки новых данных",
+        };
+        // Скрываем ошибку через 5 секунд
+        setTimeout(() => {
+          if (geolocationStatus.value?.type === "error") {
+            geolocationStatus.value = null;
+          }
+        }, 5000);
+        // Продолжаем работу с существующими данными
+      }
+
       filteredDevicesCache.value.clear();
       clearDeviceMarkers();
       pointsOnMap.value = 0;
@@ -1681,9 +1826,10 @@ onMounted(async () => {
       debounce(onBoundsChange, UI_CONFIG.DEBOUNCE_MAP_DELAY)
     );
 
-    map.events.add("zoomchange", () => {
-      onBoundsChange();
-    });
+    map.events.add(
+      "zoomchange",
+      debounce(onBoundsChange, UI_CONFIG.DEBOUNCE_MAP_DELAY)
+    );
   };
 
   const init = async () => {
@@ -1691,6 +1837,12 @@ onMounted(async () => {
     renderSelfBallon(true);
     await fetchDevicesData();
     debouncedRenderBallons(devices?.value);
+
+    // Слушаем событие фокусировки на устройстве
+    emit("focusOnDevice", focusOnDevice);
+
+    // Делаем функцию фокусировки доступной глобально
+    window.focusOnDevice = focusOnDevice;
 
     watch(devices, (newDevices) => {
       map.geoObjects?.removeAll();

@@ -1,5 +1,10 @@
 <template>
-  <dots-map @infoOpen="handleInfoOpen" @devicesCount="handleDevicesCount" />
+  <dots-map
+    :devices="devices"
+    @infoOpen="handleInfoOpen"
+    @devicesCount="handleDevicesCount"
+    @searchOpen="handleSearchOpen"
+  />
 
   <modal
     v-if="shouldShowInfoModal"
@@ -113,15 +118,25 @@
       </div>
     </template>
   </modal>
+
+  <search-modal
+    v-if="shouldShowSearchModal"
+    :devices="devices"
+    @close="handleSearchClose"
+    @selectDevice="handleDeviceSelect"
+  />
 </template>
 
 <script setup>
 import { ref } from "vue";
 import DotsMap from "./components/map/DotsMap.vue";
 import Modal from "./components/Modal.vue";
+import SearchModal from "./components/SearchModal.vue";
 
 const shouldShowInfoModal = ref(false);
+const shouldShowSearchModal = ref(false);
 const devicesCount = ref(0);
+const devices = ref({});
 
 const handleInfoOpen = () => {
   shouldShowInfoModal.value = true;
@@ -131,8 +146,34 @@ const handleInfoClose = () => {
   shouldShowInfoModal.value = false;
 };
 
-const handleDevicesCount = (count) => {
+const handleDevicesCount = (count, devicesData) => {
   devicesCount.value = count;
+  if (devicesData) {
+    devices.value = devicesData;
+  }
+};
+
+const handleSearchOpen = () => {
+  shouldShowSearchModal.value = true;
+};
+
+const handleSearchClose = () => {
+  shouldShowSearchModal.value = false;
+};
+
+const handleDeviceSelect = (data) => {
+  // Проверяем, есть ли координаты для фокусировки карты
+  if (data.latitude && data.longitude) {
+    console.log("Фокусируем карту на устройстве:", data);
+    // Вызываем функцию фокусировки карты, если она доступна
+    if (window.focusOnDevice) {
+      window.focusOnDevice(data);
+    }
+  } else {
+    console.log("Выбрано устройство без координат:", data.device);
+  }
+  // Закрываем модальное окно поиска
+  shouldShowSearchModal.value = false;
 };
 </script>
 
