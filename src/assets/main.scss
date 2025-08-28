@@ -10,36 +10,132 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Исправляем проблемы с viewport на iPhone */
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Предотвращаем горизонтальный скролл */
+  overflow-x: hidden;
 }
 
 #app {
   width: 100%;
   height: 100vh;
+  height: 100dvh; /* Используем динамический viewport height для мобильных */
   position: relative;
+  overflow: hidden; /* Предотвращаем скролл */
 }
 
 #map {
   width: 100%;
   height: 100vh;
+  height: 100dvh; /* Используем динамический viewport height для мобильных */
+  position: relative;
+  overflow: hidden;
+}
+
+/* Специальные стили для iPhone */
+@supports (-webkit-touch-callout: none) {
+  html, body {
+    /* Фиксируем высоту для iOS Safari */
+    height: -webkit-fill-available;
+  }
+  
+  #app, #map {
+    height: -webkit-fill-available;
+    min-height: -webkit-fill-available;
+  }
 }
 
 // Медиа-запросы для мобильных устройств
 @media screen and (max-width: 768px) {
   #app {
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   
   #map {
-    height: calc(100vh - 120px); // Оставляем место для кнопок сверху и счетчика снизу
+    height: calc(100vh - 120px);
+    height: calc(100dvh - 120px);
     flex: 1;
+    overflow: hidden;
   }
 }
 
 // Специально для iPhone и устройств с малой высотой экрана
 @media screen and (max-width: 480px), screen and (max-height: 700px) {
   #map {
-    height: calc(100vh - 140px); // Еще больше места для UI элементов
+    height: calc(100vh - 140px);
+    height: calc(100dvh - 140px);
+  }
+}
+
+/* Дополнительные стили для мобильных устройств */
+@media screen and (max-width: 768px) {
+  /* Предотвращаем масштабирование на мобильных */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Исправляем проблемы с input на iOS */
+  input, textarea, select {
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+  
+  /* Фиксируем проблемы с position: fixed на iOS */
+  .modal, .node-counter, .geolocation-status {
+    position: absolute;
+  }
+  
+  /* Исправляем проблемы с Yandex Maps на iPhone */
+  .ymaps-2-1-79-map {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+  
+  .ymaps-2-1-79-map-container {
+    width: 100% !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+  
+  /* Исправляем проблемы с кластерами на мобильных */
+  .ymaps-2-1-79-cluster {
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  
+  /* Исправляем проблемы с баллунами на мобильных */
+  .ymaps-2-1-79-balloon {
+    max-width: 90vw !important;
+    max-height: 80vh !important;
+    overflow: hidden !important;
+  }
+  
+  .ymaps-2-1-79-balloon__content {
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+}
+
+/* Специальные стили для iPhone с вырезами (notch) */
+@supports (padding: max(0px)) {
+  #app {
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+  
+  #map {
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
   }
 }

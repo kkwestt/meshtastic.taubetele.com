@@ -97,7 +97,7 @@ const filterDevicesByBounds = (devices, bounds) => {
 
 const debouncedRenderBallons = debounce((devices, isUpdate) => {
   renderBallons(devices, isUpdate);
-}, 2000);
+}, 500);
 
 const formatTime = (timestamp) => {
   if (!timestamp || timestamp === "undefined" || timestamp === 0) {
@@ -259,8 +259,8 @@ const createBalloonContent = async (device, nodeId) => {
     ${
       latestPosition.rawData.latitude_i !== undefined
         ? `<span>Координаты:</span><span>${(
-            latestPosition.rawData.latitude_i / 10000
-          ).toFixed(4)}, ${(latestPosition.rawData.longitude_i / 10000).toFixed(
+            latestPosition.rawData.latitude_i / 1e7
+          ).toFixed(4)}, ${(latestPosition.rawData.longitude_i / 1e7).toFixed(
             4
           )}${
             latestPosition.rawData.altitude !== undefined
@@ -896,6 +896,29 @@ const renderBallons = (devices, isUpdate = false) => {
       return;
     }
 
+    // Сохраняем информацию об открытом баллуне перед обновлением
+    let openedBalloonInfo = null;
+    let openedBalloonContent = null;
+    if (isUpdate && openedNodeId) {
+      // Находим текущий открытый баллун и сохраняем его состояние
+      const currentPlacemarks = map.geoObjects.getAll();
+      for (let placemark of currentPlacemarks) {
+        if (
+          placemark.properties._data &&
+          placemark.properties._data.nodeId === openedNodeId &&
+          placemark.balloon.isOpen()
+        ) {
+          openedBalloonInfo = {
+            nodeId: openedNodeId,
+            isOpen: true,
+          };
+          // Сохраняем текущее содержимое баллуна
+          openedBalloonContent = placemark.properties.get("balloonContentBody");
+          break;
+        }
+      }
+    }
+
     if (isUpdate) {
       clearDeviceMarkers();
     }
@@ -986,6 +1009,11 @@ const renderBallons = (devices, isUpdate = false) => {
           );
         }
       });
+
+      placemark.events.add("balloonclose", () => {
+        openedNodeId = null;
+      });
+
       placemarks.push(placemark);
     }
 
@@ -993,17 +1021,26 @@ const renderBallons = (devices, isUpdate = false) => {
       placemarks.forEach((p) => {
         map.geoObjects.add(p);
 
-        if (openedNodeId && p.properties._data.nodeId === openedNodeId) {
-          const length = map.geoObjects.getLength();
-          const geometryObject = map.geoObjects.get(length - 1);
+        // Восстанавливаем открытый баллун после обновления данных
+        if (
+          openedBalloonInfo &&
+          p.properties._data.nodeId === openedBalloonInfo.nodeId
+        ) {
+          // Если у нас есть сохраненное содержимое, используем его
+          if (openedBalloonContent) {
+            p.properties.set("balloonContentBody", openedBalloonContent);
+          }
 
-          geometryObject.balloon.events.add("beforeuserclose", () => {
+          p.balloon.events.add("beforeuserclose", () => {
             openedNodeId = null;
           });
 
-          geometryObject.balloon.open(undefined, undefined, {
-            balloonAutoPan: false,
-          });
+          // Открываем баллун автоматически после обновления
+          setTimeout(() => {
+            p.balloon.open(undefined, undefined, {
+              balloonAutoPan: false,
+            });
+          }, 100);
         }
       });
 
@@ -1022,9 +1059,211 @@ const renderBallons = (devices, isUpdate = false) => {
 
     clusterer.add(placemarks);
     map.geoObjects.add(clusterer);
+
+    // Восстанавливаем открытый баллун для кластеризованных маркеров
+    if (openedBalloonInfo) {
+      // Находим маркер с нужным nodeId в кластерере
+      const placemarksInCluster = clusterer.getGeoObjects();
+      for (let placemark of placemarksInCluster) {
+        if (
+          placemark.properties._data &&
+          placemark.properties._data.nodeId === openedBalloonInfo.nodeId
+        ) {
+          // Если у нас есть сохраненное содержимое, используем его
+          if (openedBalloonContent) {
+            placemark.properties.set(
+              "balloonContentBody",
+              openedBalloonContent
+            );
+          }
+
+          placemark.balloon.events.add("beforeuserclose", () => {
+            openedNodeId = null;
+          });
+
+          // Открываем баллун для этого маркера
+          setTimeout(() => {
+            placemark.balloon.open(undefined, undefined, {
+              balloonAutoPan: false,
+            });
+          }, 100);
+          break;
+        }
+      }
+    }
+
     pointsOnMap.value = placemarks.length;
   } catch (error) {
     console.error("❌ Ошибка в renderBallons:", error);
+    pointsOnMap.value = 0;
+  }
+};
+
+const renderBallonsWithState = (
+  devices,
+  openedBalloonInfo = null,
+  openedBalloonContent = null
+) => {
+  try {
+    if (!devices || Object.keys(devices).length === 0) {
+      return;
+    }
+
+    const placemarks = [];
+    const state = map.action.getCurrentState();
+    const now = Date.now();
+
+    for (const index in devices) {
+      const device = devices[index];
+      const nodeId = device.device_id || device.hex_id || device.id || index;
+
+      if (!device.latitude || !device.longitude) continue;
+
+      const deviceTime = device.s_time;
+      const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
+
+      if (timeDiffHours > 24) continue;
+
+      const bounds = map.getBounds();
+      if (!isPointInBounds(device.latitude, device.longitude, bounds)) continue;
+
+      let presetcolor;
+      let iconOptions = {};
+
+      if (timeDiffHours < 6 && (device.mqtt === "1" || device.mqtt === 1)) {
+        presetcolor = MAP_PRESETS.MQTT;
+        iconOptions = {
+          preset: `${presetcolor}`,
+        };
+      } else if (timeDiffHours < 6) {
+        presetcolor = MAP_PRESETS.ONLINE;
+        iconOptions = {
+          preset: `${presetcolor}`,
+        };
+      } else if (timeDiffHours >= 6) {
+        presetcolor = MAP_PRESETS.INACTIVE;
+        iconOptions = {
+          preset: `${presetcolor}`,
+        };
+      }
+
+      const timestampfooter = formatTime(device.s_time);
+
+      const placemark = new window.ymaps.Placemark(
+        [device.latitude, device.longitude],
+        {
+          iconContent: device.shortName,
+          balloonContentHeader: device.longName + " (" + device.shortName + ")",
+          balloonContentBody: `
+          <div style="max-width: 350px; font-size: 12px;">
+          <div style="margin-top: 8px; color: #666;">🔄 Загрузка информации об узле...</div>
+          </div>
+          `,
+          balloonContentFooter: `Updated: ${timestampfooter}`,
+          clusterCaption: `Node: <strong>${
+            device.shortName || device.short_name || nodeId
+          }</strong>`,
+          nodeId,
+        },
+        iconOptions
+      );
+
+      placemark.events.add("balloonopen", async (event) => {
+        const nodeId =
+          event.originalEvent.currentTarget.properties._data.nodeId;
+        openedNodeId = nodeId;
+        renderPath(openedNodeId);
+
+        try {
+          const fullContent = await createBalloonContent(device, nodeId);
+          placemark.properties.set("balloonContentBody", fullContent);
+        } catch (error) {
+          console.error("Ошибка загрузки содержимого баллуна:", error);
+          placemark.properties.set(
+            "balloonContentBody",
+            `
+            <div style="max-width: 350px; font-size: 12px;">
+            <div style="margin-top: 8px; color: #f44336;">❌ Ошибка загрузки данных</div>
+            </div>
+            `
+          );
+        }
+      });
+
+      placemark.events.add("balloonclose", () => {
+        openedNodeId = null;
+      });
+
+      placemarks.push(placemark);
+    }
+
+    if (state.zoom > MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS) {
+      placemarks.forEach((p) => {
+        map.geoObjects.add(p);
+
+        // Восстанавливаем открытый баллун после обновления данных
+        if (
+          openedBalloonInfo &&
+          p.properties._data.nodeId === openedBalloonInfo.nodeId
+        ) {
+          // Если у нас есть сохраненное содержимое, используем его
+          if (openedBalloonContent) {
+            p.properties.set("balloonContentBody", openedBalloonContent);
+          }
+
+          // Открываем баллун автоматически после обновления
+          setTimeout(() => {
+            p.balloon.open(undefined, undefined, {
+              balloonAutoPan: false,
+            });
+          }, 50);
+        }
+      });
+
+      pointsOnMap.value = placemarks.length;
+      return;
+    }
+
+    const clusterer = new ymaps.Clusterer({
+      preset: MAP_PRESETS.CLUSTER,
+      gridSize: MAP_CONFIG.CLUSTER_GRID_SIZE,
+      groupByCoordinates: false,
+      clusterDisableClickZoom: true,
+      clusterHideIconOnBalloonOpen: false,
+      geoObjectHideIconOnBalloonOpen: false,
+    });
+
+    clusterer.add(placemarks);
+    map.geoObjects.add(clusterer);
+
+    // Восстанавливаем открытый баллун для кластеризованных маркеров
+    if (openedBalloonInfo) {
+      const placemarksInCluster = clusterer.getGeoObjects();
+      for (let placemark of placemarksInCluster) {
+        if (
+          placemark.properties._data &&
+          placemark.properties._data.nodeId === openedBalloonInfo.nodeId
+        ) {
+          if (openedBalloonContent) {
+            placemark.properties.set(
+              "balloonContentBody",
+              openedBalloonContent
+            );
+          }
+
+          setTimeout(() => {
+            placemark.balloon.open(undefined, undefined, {
+              balloonAutoPan: false,
+            });
+          }, 50);
+          break;
+        }
+      }
+    }
+
+    pointsOnMap.value = placemarks.length;
+  } catch (error) {
+    console.error("❌ Ошибка в renderBallonsWithState:", error);
     pointsOnMap.value = 0;
   }
 };
@@ -1074,7 +1313,30 @@ const stopDataUpdates = () => {
 
 const clearDeviceMarkers = () => {
   if (!map) return;
+
+  // Сохраняем геолокационные маркеры и пути
+  const geoObjectsToKeep = [];
+  const allObjects = map.geoObjects.getAll();
+
+  for (let obj of allObjects) {
+    // Сохраняем геолокационные маркеры (они имеют preset geolocation)
+    if (obj.options && obj.options.get("preset") === MAP_PRESETS.GEOLOCATION) {
+      geoObjectsToKeep.push(obj);
+    }
+    // Сохраняем полилинии (пути GPS)
+    else if (obj instanceof ymaps.Polyline) {
+      geoObjectsToKeep.push(obj);
+    }
+  }
+
+  // Удаляем все объекты
   map.geoObjects.removeAll();
+
+  // Возвращаем сохраненные объекты
+  geoObjectsToKeep.forEach((obj) => {
+    map.geoObjects.add(obj);
+  });
+
   pointsOnMap.value = 0;
 };
 
@@ -1200,11 +1462,6 @@ onMounted(async () => {
             }
           })
           .catch(function (error) {
-            console.error("Ошибка получения Yandex Maps геолокации:", error);
-            geolocationStatus.value = {
-              type: "error",
-              message: "Не удалось определить местоположение",
-            };
             if (shouldSetCenter) {
               map.setCenter(MAP_CONFIG.DEFAULT_CENTER, MAP_CONFIG.DEFAULT_ZOOM);
             }
@@ -1213,7 +1470,7 @@ onMounted(async () => {
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 60000, // 1 минута
+        maximumAge: 10000, // 1 минута
       }
     );
   };
@@ -1237,10 +1494,63 @@ onMounted(async () => {
     });
 
     const onBoundsChange = () => {
+      // Сохраняем информацию об открытом баллуне перед обновлением
+      let openedBalloonInfo = null;
+      let openedBalloonContent = null;
+      if (openedNodeId) {
+        // Находим текущий открытый баллун и сохраняем его состояние
+        const currentPlacemarks = map.geoObjects.getAll();
+        for (let obj of currentPlacemarks) {
+          // Проверяем обычные маркеры
+          if (
+            obj.properties &&
+            obj.properties._data &&
+            obj.properties._data.nodeId === openedNodeId &&
+            obj.balloon &&
+            obj.balloon.isOpen()
+          ) {
+            openedBalloonInfo = {
+              nodeId: openedNodeId,
+              isOpen: true,
+            };
+            openedBalloonContent = obj.properties.get("balloonContentBody");
+            break;
+          }
+          // Проверяем кластеры
+          else if (obj.getGeoObjects) {
+            const placemarksInCluster = obj.getGeoObjects();
+            for (let placemark of placemarksInCluster) {
+              if (
+                placemark.properties &&
+                placemark.properties._data &&
+                placemark.properties._data.nodeId === openedNodeId &&
+                placemark.balloon &&
+                placemark.balloon.isOpen()
+              ) {
+                openedBalloonInfo = {
+                  nodeId: openedNodeId,
+                  isOpen: true,
+                };
+                openedBalloonContent =
+                  placemark.properties.get("balloonContentBody");
+                break;
+              }
+            }
+            if (openedBalloonInfo) break;
+          }
+        }
+      }
+
       filteredDevicesCache.value.clear();
-      map.geoObjects.removeAll();
+      clearDeviceMarkers();
       pointsOnMap.value = 0;
-      renderBallons(devices?.value);
+
+      // Рендерим баллуны с сохранением состояния открытого баллуна
+      renderBallonsWithState(
+        devices?.value,
+        openedBalloonInfo,
+        openedBalloonContent
+      );
     };
 
     map.events.add(
