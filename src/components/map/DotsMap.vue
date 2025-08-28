@@ -760,6 +760,33 @@ const createBalloonContent = async (device, nodeId) => {
       const latestTrace = tracerouteInfo.data[0];
       const rawData = latestTrace.rawData;
 
+      // Ищем обратный маршрут (от получателя к отправителю)
+      let reverseTraceroute = null;
+      try {
+        if (rawData && rawData.route && rawData.route.length > 0) {
+          // Ищем traceroute в обратном направлении
+          const reverseTracerouteInfo = await meshtasticApi.getTracerouteInfo(
+            latestTrace.to.toString(16)
+          );
+          if (
+            reverseTracerouteInfo &&
+            reverseTracerouteInfo.data &&
+            reverseTracerouteInfo.data.length > 0
+          ) {
+            // Ищем запись, где получатель = отправитель исходного traceroute
+            for (const trace of reverseTracerouteInfo.data) {
+              if (trace.to === latestTrace.from) {
+                reverseTraceroute = trace;
+                break;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log("Обратный traceroute не найден:", error.message);
+        // Это не критическая ошибка, продолжаем работу
+      }
+
       if (rawData) {
         // Формируем компактный маршрут с SNR
         let routeDisplay = "";
@@ -785,11 +812,46 @@ const createBalloonContent = async (device, nodeId) => {
           routeParts.push(`!${latestTrace.to.toString(16)}`);
 
           routeDisplay = routeParts.join(" → ");
+        } else {
+          // Если нет промежуточных узлов, показываем прямой маршрут
+          routeDisplay = `!${latestTrace.from.toString(
+            16
+          )} → !${latestTrace.to.toString(16)}`;
         }
 
         // Формируем обратный маршрут если есть
         let backRouteDisplay = "";
-        if (rawData.route_back && rawData.route_back.length > 0) {
+        if (
+          reverseTraceroute &&
+          reverseTraceroute.rawData &&
+          reverseTraceroute.rawData.route &&
+          reverseTraceroute.rawData.route.length > 0
+        ) {
+          // Используем найденный обратный traceroute
+          const backParts = [];
+
+          // Добавляем источник (получатель исходного traceroute)
+          backParts.push(`!${reverseTraceroute.from.toString(16)}`);
+
+          // Добавляем промежуточные узлы с SNR
+          for (let i = 0; i < reverseTraceroute.rawData.route.length; i++) {
+            const nodeHex = `!${reverseTraceroute.rawData.route[i].toString(
+              16
+            )}`;
+            const snr =
+              reverseTraceroute.rawData.snr_towards &&
+              reverseTraceroute.rawData.snr_towards[i]
+                ? `(${reverseTraceroute.rawData.snr_towards[i]}dB)`
+                : "";
+            backParts.push(`${nodeHex}${snr}`);
+          }
+
+          // Добавляем назначение (отправитель исходного traceroute)
+          backParts.push(`!${reverseTraceroute.to.toString(16)}`);
+
+          backRouteDisplay = backParts.join(" → ");
+        } else if (rawData.route_back && rawData.route_back.length > 0) {
+          // Fallback к старым данным route_back если есть
           const backParts = [];
           for (let i = 0; i < rawData.route_back.length; i++) {
             const nodeHex = `!${rawData.route_back[i].toString(16)}`;
@@ -812,6 +874,13 @@ const createBalloonContent = async (device, nodeId) => {
           metrics.push(`RSSI: ${latestTrace.rxRssi} dBm`);
         if (latestTrace.hopLimit !== undefined)
           metrics.push(`Hops: ${latestTrace.hopLimit}`);
+
+        // Добавляем информацию о времени получения
+        if (latestTrace.rxTime) {
+          const rxTime = new Date(latestTrace.rxTime);
+          metrics.push(`RX: ${rxTime.toLocaleTimeString()}`);
+        }
+
         const metricsLine = metrics.join(" | ");
 
         tracerouteHtml = `
@@ -820,14 +889,17 @@ const createBalloonContent = async (device, nodeId) => {
       latestTrace.timestamp
     )}</div>
     <div style="font-size: 11px; line-height: 1.3;">
+    <div style="margin-bottom: 4px; font-weight: 500; color: #1976d2;">
+      От: !${latestTrace.from.toString(16)} → К: !${latestTrace.to.toString(16)}
+    </div>
     ${
       routeDisplay
-        ? `<div style="margin-bottom: 2px; word-break: break-all;">Маршрут туда: ${routeDisplay}</div>`
+        ? `<div style="margin-bottom: 2px; word-break: break-all;">🔄 Туда: ${routeDisplay}</div>`
         : ""
     }
     ${
-      backRouteDisplay !== "Нет маршрута"
-        ? `<div style="margin-bottom: 2px;">Обратно: ${backRouteDisplay}</div>`
+      backRouteDisplay !== "нет маршрута"
+        ? `<div style="margin-bottom: 2px;">🔄 Обратно: ${backRouteDisplay}</div>`
         : ""
     }
     ${
@@ -837,7 +909,21 @@ const createBalloonContent = async (device, nodeId) => {
     }
     ${
       latestTrace.gatewayId
-        ? `<div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">Gateway: ${latestTrace.gatewayId}</div>`
+        ? `<div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">Gateway: ${
+            latestTrace.gatewayId
+          } ${
+            rawData.route &&
+            rawData.route.includes(parseInt(latestTrace.gatewayId.slice(1), 16))
+              ? "(в маршруте)"
+              : ""
+          }</div>`
+        : ""
+    }
+    ${
+      reverseTraceroute
+        ? `<div style="font-size: 10px; color: #666; margin-top: 2px; line-height: 1.2;">Обратный маршрут найден: ${formatTime(
+            reverseTraceroute.timestamp
+          )}</div>`
         : ""
     }
     </div>
@@ -1269,6 +1355,23 @@ const renderBallonsWithState = (
 const fetchDevicesData = async () => {
   try {
     const response = await fetch("https://meshtasticback.taubetele.com/dots");
+
+    if (!response.ok) {
+      if (response.status === 502) {
+        throw new Error(
+          "Сервер временно недоступен (502 Bad Gateway). Попробуйте позже."
+        );
+      } else if (response.status >= 500) {
+        throw new Error(
+          `Ошибка сервера (${response.status}). Попробуйте позже.`
+        );
+      } else if (response.status >= 400) {
+        throw new Error(
+          `Ошибка запроса (${response.status}). Проверьте настройки.`
+        );
+      }
+    }
+
     const data = await response.json();
 
     if (data && data.data) {
@@ -1285,8 +1388,30 @@ const fetchDevicesData = async () => {
     }
   } catch (error) {
     console.error("❌ Ошибка загрузки данных устройств:", error);
+
+    // Показываем пользователю понятное сообщение об ошибке
+    if (error.message.includes("Failed to fetch")) {
+      geolocationStatus.value = {
+        type: "error",
+        message:
+          "❌ Не удается подключиться к серверу. Проверьте интернет-соединение или попробуйте позже.",
+      };
+    } else {
+      geolocationStatus.value = {
+        type: "error",
+        message: `❌ ${error.message}`,
+      };
+    }
+
     devices.value = {};
     emit("devicesCount", 0);
+
+    // Автоматически скрываем ошибку через 10 секунд
+    setTimeout(() => {
+      if (geolocationStatus.value?.type === "error") {
+        geolocationStatus.value = null;
+      }
+    }, 10000);
   }
 };
 
