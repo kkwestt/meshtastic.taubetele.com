@@ -36,23 +36,10 @@
               <span class="device-short">{{ getDeviceShortName(device) }}</span>
             </div>
             <div class="device-details">
-              <span class="device-id">ID: {{ getDeviceId(device) }}</span>
               <span class="device-time">{{ formatTime(device.s_time) }}</span>
             </div>
-            <!-- Отладочная информация -->
-            <div
-              class="device-debug"
-              style="font-size: 0.75rem; color: #666; margin-top: 4px"
-            >
-              Debug:
-              {{
-                JSON.stringify({
-                  device_id: device?.device_id,
-                  hex_id: device?.hex_id,
-                  id: device?.id,
-                })
-              }}
-            </div>
+            <!-- Debug section removed -->
+
             <div class="device-location" v-if="hasValidLocation(device)">
               📍 {{ formatCoordinate(device.latitude) }},
               {{ formatCoordinate(device.longitude) }}

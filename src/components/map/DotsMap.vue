@@ -937,23 +937,6 @@ const createBalloonContent = async (device, nodeId) => {
 
         const metricsLine = metrics.join(" | ");
 
-        // Отладочная информация
-        console.log("Traceroute debug:", {
-          routeDisplay,
-          backRouteDisplay,
-          rawData: rawData,
-          reverseTraceroute: reverseTraceroute,
-        });
-
-        // Детальная отладка rawData
-        console.log("Детальная информация rawData:", {
-          route: rawData.route,
-          route_back: rawData.route_back,
-          snr_towards: rawData.snr_towards,
-          snr_back: rawData.snr_back,
-          decoded: rawData.decoded,
-        });
-
         tracerouteHtml = `
     <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
     <div style="font-weight: bold; margin-bottom: 2px;">Traceroute: ${formatTime(
