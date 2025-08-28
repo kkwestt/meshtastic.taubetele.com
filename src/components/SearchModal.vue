@@ -59,7 +59,7 @@
         <h3>💡 Подсказки по поиску:</h3>
         <ul>
           <li><strong>ID:</strong> 12345678</li>
-          <li><strong>Hex ID:</strong> 240d19b</li>
+          <li><strong>Hex ID:</strong> 01ab2455</li>
           <li><strong>Long Name:</strong> LONGNAME</li>
           <li><strong>Short Name:</strong> NAME</li>
         </ul>
