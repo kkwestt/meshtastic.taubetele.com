@@ -679,9 +679,7 @@ const createBalloonContent = async (device, nodeId) => {
     }
     ${
       rawData.decoded.region !== undefined
-        ? `<span>Регион:</span><span>${
-            REGIONS[rawData.decoded.region] || rawData.decoded.region
-          }</span>`
+        ? `<span>Регион:</span><span>${REGIONS[rawData.decoded.region]}</span>`
         : ""
     }
     ${
@@ -1064,7 +1062,7 @@ const startDataUpdates = () => {
 
   updateInterval = setInterval(async () => {
     await updateDevicesData();
-  }, 30000);
+  }, 60000);
 };
 
 const stopDataUpdates = () => {
