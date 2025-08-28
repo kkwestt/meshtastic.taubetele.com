@@ -186,10 +186,8 @@ const createBalloonContent = async (device, nodeId) => {
         : ""
     }
     ${
-      rawData.hw_model
-        ? `<span>Модель:</span><span>${
-            HARDWARE_MODELS[rawData.hw_model]
-          }</span>`
+      rawData.hwModel
+        ? `<span>Модель:</span><span>${HARDWARE_MODELS[rawData.hwModel]}</span>`
         : ""
     }
     </div>
@@ -666,15 +664,15 @@ const createBalloonContent = async (device, nodeId) => {
         : ""
     }
     ${
-      rawData.decoded.hw_model !== undefined
+      rawData.decoded.hwModel !== undefined
         ? `<span>Модель:</span><span>${
-            HARDWARE_MODELS[rawData.decoded.hw_model]
+            HARDWARE_MODELS[rawData.decoded.hwModel]
           }</span>`
         : ""
     }
     ${
-      rawData.decoded.firmware_version
-        ? `<span>Прошивка:</span><span>${rawData.decoded.firmware_version}</span>`
+      rawData.decoded.firmwareVersion
+        ? `<span>Прошивка:</span><span>${rawData.decoded.firmwareVersion}</span>`
         : ""
     }
     ${
@@ -683,14 +681,14 @@ const createBalloonContent = async (device, nodeId) => {
         : ""
     }
     ${
-      rawData.decoded.modem_preset !== undefined
-        ? `<span>Пресет модема:</span><span>${rawData.decoded.modem_preset}</span>`
+      rawData.decoded.modemPreset !== undefined
+        ? `<span>Пресет модема:</span><span>${rawData.decoded.modemPreset}</span>`
         : ""
     }
     ${
-      rawData.decoded.has_default_channel !== undefined
+      rawData.decoded.hasDefaultChannel !== undefined
         ? `<span>Канал по умолчанию:</span><span>${
-            rawData.decoded.has_default_channel ? "Да" : "Нет"
+            rawData.decoded.hasDefaultChannel ? "Да" : "Нет"
           }</span>`
         : ""
     }
