@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "82:80"
+    restart: unless-stopped
+    container_name: meshtastic_taubetele_com_82
+    environment:
+      - NODE_ENV=production
+    network_mode: bridge

@@ -1,0 +1,45 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+}
+
+#map {
+  width: 100%;
+  height: 100vh;
+}
+
+// Медиа-запросы для мобильных устройств
+@media screen and (max-width: 768px) {
+  #app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  #map {
+    height: calc(100vh - 120px); // Оставляем место для кнопок сверху и счетчика снизу
+    flex: 1;
+  }
+}
+
+// Специально для iPhone и устройств с малой высотой экрана
+@media screen and (max-width: 480px), screen and (max-height: 700px) {
+  #map {
+    height: calc(100vh - 140px); // Еще больше места для UI элементов
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "simple-yandex-map",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Meshtastic Light Map",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "sass": "^1.63.6",
+    "vite": "^6.3.5",
+    "vue": "^3.3.4"
+  }
+}
