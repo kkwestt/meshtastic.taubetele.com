@@ -1152,7 +1152,7 @@ onMounted(async () => {
           map.geoObjects.add(geolocationPlacemark);
 
           if (shouldSetCenter) {
-            map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 8);
+            map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 2);
           }
         } catch (error) {
           console.error("Ошибка обработки браузерной геолокации:", error);

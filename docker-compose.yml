@@ -2,7 +2,10 @@ version: "3.8"
 
 services:
   frontend:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_YANDEX_MAPS_API_KEY: ${VITE_YANDEX_MAPS_API_KEY}
     ports:
       - "82:80"
     restart: unless-stopped
