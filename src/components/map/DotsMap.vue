@@ -1152,7 +1152,7 @@ onMounted(async () => {
           map.geoObjects.add(geolocationPlacemark);
 
           if (shouldSetCenter) {
-            map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 2);
+            map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 3);
           }
         } catch (error) {
           console.error("Ошибка обработки браузерной геолокации:", error);
@@ -1166,14 +1166,6 @@ onMounted(async () => {
         }
       },
       (error) => {
-        console.warn("Браузерная геолокация недоступна:", error.message);
-
-        geolocationStatus.value = {
-          type: "warning",
-          message:
-            "Браузерная геолокация недоступна, пробуем альтернативный способ...",
-        };
-
         // Fallback к Yandex Maps геолокации
         ymaps.geolocation
           .get({
