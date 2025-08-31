@@ -164,13 +164,10 @@ const handleSearchClose = () => {
 const handleDeviceSelect = (data) => {
   // Проверяем, есть ли координаты для фокусировки карты
   if (data.latitude && data.longitude) {
-    console.log("Фокусируем карту на устройстве:", data);
     // Вызываем функцию фокусировки карты, если она доступна
     if (window.focusOnDevice) {
       window.focusOnDevice(data);
     }
-  } else {
-    console.log("Выбрано устройство без координат:", data.device);
   }
   // Закрываем модальное окно поиска
   shouldShowSearchModal.value = false;
@@ -197,6 +194,15 @@ body {
 #map {
   width: 100%;
   height: 100vh;
+  height: 100dvh;
+}
+
+/* Стили для десктопных устройств */
+@media screen and (min-width: 769px) {
+  #map {
+    height: 100vh;
+    height: 100dvh;
+  }
 }
 
 .info-section {

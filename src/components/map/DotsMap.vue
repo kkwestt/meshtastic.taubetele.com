@@ -5,7 +5,15 @@
         >🔄 Загрузка данных...</span
       >
       <span v-else>
-        Узлов: {{ Object.keys(devices).length }} | Видимых: {{ pointsOnMap }}
+        Узлов: {{ Object.keys(devices).length }} |
+        <span
+          v-if="
+            map && map.getZoom() <= MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS
+          "
+        >
+          Кластеров: {{ pointsOnMap }}
+        </span>
+        <span v-else> Маркеров: {{ pointsOnMap }} </span>
       </span>
       <div class="update-indicator" v-if="updateInterval">
         <span class="update-dot"></span>
@@ -62,6 +70,7 @@ const devices = ref({});
 const pointsOnMap = ref(0);
 const filteredDevicesCache = ref(new Map());
 const geolocationStatus = ref(null);
+const isDataLoaded = ref(false); // Флаг загрузки данных
 
 const clearGeolocationStatus = () => {
   setTimeout(() => {
@@ -107,9 +116,17 @@ const filterDevicesByBounds = (devices, bounds) => {
   return filtered;
 };
 
-const debouncedRenderBallons = debounce((devices, isUpdate) => {
-  renderBallons(devices, isUpdate);
-}, 500);
+const debouncedRenderBallons = debounce(
+  (
+    devices,
+    isUpdate,
+    openedBalloonInfo = null,
+    openedBalloonContent = null
+  ) => {
+    renderBallons(devices, isUpdate, openedBalloonInfo, openedBalloonContent);
+  },
+  500
+);
 
 const formatTime = (timestamp) => {
   if (!timestamp || timestamp === "undefined" || timestamp === 0) {
@@ -250,7 +267,7 @@ const createBalloonContent = async (device, nodeId) => {
       }
     }
   } catch (error) {
-    console.error("Ошибка загрузки информации об узле:", error);
+    // Ошибка загрузки информации об узле - продолжаем работу
   }
 
   try {
@@ -335,7 +352,7 @@ const createBalloonContent = async (device, nodeId) => {
       }
     }
   } catch (error) {
-    console.error("Ошибка загрузки информации о позиции:", error);
+    // Ошибка загрузки информации о позиции - продолжаем работу
   }
 
   try {
@@ -570,7 +587,7 @@ const createBalloonContent = async (device, nodeId) => {
       telemetryInfoHtml = deviceMetricsHtml + environmentMetricsHtml;
     }
   } catch (error) {
-    console.error("Ошибка загрузки телеметрии:", error);
+    // Ошибка загрузки телеметрии - продолжаем работу
   }
 
   try {
@@ -652,7 +669,7 @@ const createBalloonContent = async (device, nodeId) => {
       }
     }
   } catch (error) {
-    console.error("Ошибка загрузки текстовых сообщений:", error);
+    // Ошибка загрузки текстовых сообщений - продолжаем работу
   }
 
   try {
@@ -757,7 +774,7 @@ const createBalloonContent = async (device, nodeId) => {
       }
     }
   } catch (error) {
-    console.error("Ошибка загрузки отчета карты:", error);
+    // Ошибка загрузки отчета карты - продолжаем работу
   }
 
   // Загружаем данные traceroute
@@ -776,22 +793,13 @@ const createBalloonContent = async (device, nodeId) => {
       let reverseTraceroute = null;
       try {
         if (rawData && rawData.route && rawData.route.length > 0) {
-          console.log("Ищем обратный traceroute для:", {
-            from: latestTrace.from,
-            to: latestTrace.to,
-            fromHex: latestTrace.from.toString(16),
-            toHex: latestTrace.to.toString(16),
-          });
-
           // Конвертируем hex ID в числовой для поиска
           const toNodeId = parseInt(latestTrace.to.toString(16), 16);
-          console.log("Конвертированный toNodeId:", toNodeId);
 
           // Ищем traceroute в обратном направлении по числовому ID
           const reverseTracerouteInfo = await meshtasticApi.getTracerouteInfo(
             toNodeId.toString(16)
           );
-          console.log("Получен reverseTracerouteInfo:", reverseTracerouteInfo);
 
           if (
             reverseTracerouteInfo &&
@@ -800,14 +808,8 @@ const createBalloonContent = async (device, nodeId) => {
           ) {
             // Ищем запись, где получатель = отправитель исходного traceroute
             for (const trace of reverseTracerouteInfo.data) {
-              console.log("Проверяем trace:", {
-                traceFrom: trace.from,
-                traceTo: trace.to,
-                targetFrom: latestTrace.from,
-              });
               if (trace.to === latestTrace.from) {
                 reverseTraceroute = trace;
-                console.log("Найден обратный traceroute:", reverseTraceroute);
                 break;
               }
             }
@@ -819,14 +821,10 @@ const createBalloonContent = async (device, nodeId) => {
             rawData.route_back &&
             rawData.route_back.length > 0
           ) {
-            console.log(
-              "Используем route_back из исходных данных:",
-              rawData.route_back
-            );
+            // route_back данные будут использованы ниже
           }
         }
       } catch (error) {
-        console.log("Обратный traceroute не найден:", error.message);
         // Это не критическая ошибка, продолжаем работу
       }
 
@@ -895,12 +893,6 @@ const createBalloonContent = async (device, nodeId) => {
           backRouteDisplay = backParts.join(" → ");
         } else if (rawData.route_back && rawData.route_back.length > 0) {
           // Fallback к данным route_back если есть
-          console.log(
-            "Формируем обратный маршрут из route_back:",
-            rawData.route_back,
-            "snr_back:",
-            rawData.snr_back
-          );
           const backParts = [];
 
           // Добавляем назначение исходного traceroute (откуда идет обратный маршрут)
@@ -920,10 +912,8 @@ const createBalloonContent = async (device, nodeId) => {
           backParts.push(`!${latestTrace.from.toString(16)}`);
 
           backRouteDisplay = backParts.join(" → ");
-          console.log("Сформирован backRouteDisplay:", backRouteDisplay);
         } else {
           backRouteDisplay = "нет маршрута";
-          console.log("Нет данных для обратного маршрута");
         }
 
         // Формируем компактную строку с метриками
@@ -979,7 +969,7 @@ const createBalloonContent = async (device, nodeId) => {
       }
     }
   } catch (error) {
-    console.error("Ошибка загрузки данных traceroute:", error);
+    // Ошибка загрузки данных traceroute - продолжаем работу
   }
 
   return `
@@ -1017,46 +1007,95 @@ const renderPath = async (nodeId) => {
 
     map.geoObjects.add(polyline);
   } catch (error) {
-    console.error("Ошибка отображения пути:", error);
+    // Ошибка отображения пути - продолжаем работу
   }
 };
 
-const renderBallons = (devices, isUpdate = false) => {
+const renderBallons = (
+  devices,
+  isUpdate = false,
+  openedBalloonInfo = null,
+  openedBalloonContent = null
+) => {
   try {
     if (!devices || Object.keys(devices).length === 0) {
+      console.warn("⚠️ renderBallons: нет устройств для отображения");
       return;
     }
 
     // Сохраняем информацию об открытом баллуне перед обновлением
-    let openedBalloonInfo = null;
-    let openedBalloonContent = null;
-    if (isUpdate && openedNodeId) {
+    let currentOpenedBalloonInfo = openedBalloonInfo;
+    let currentOpenedBalloonContent = openedBalloonContent;
+
+    if (isUpdate && openedNodeId && !openedBalloonInfo) {
       // Находим текущий открытый баллун и сохраняем его состояние
-      const currentPlacemarks = map.geoObjects.getAll();
+      const currentPlacemarks = [];
+      map.geoObjects.each((placemark) => {
+        currentPlacemarks.push(placemark);
+      });
+
       for (let placemark of currentPlacemarks) {
         if (
           placemark.properties._data &&
           placemark.properties._data.nodeId === openedNodeId &&
           placemark.balloon.isOpen()
         ) {
-          openedBalloonInfo = {
+          currentOpenedBalloonInfo = {
             nodeId: openedNodeId,
             isOpen: true,
           };
           // Сохраняем текущее содержимое баллуна
-          openedBalloonContent = placemark.properties.get("balloonContentBody");
+          currentOpenedBalloonContent =
+            placemark.properties.get("balloonContentBody");
           break;
         }
       }
     }
 
     if (isUpdate) {
+      // При обновлении данных полностью очищаем все маркеры
       clearDeviceMarkers();
+    } else {
+      // При изменении границ карты очищаем только маркеры устройств,
+      // но сохраняем геолокацию и пути
+      const geoObjectsToKeep = [];
+
+      // Получаем все геообъекты правильным способом
+      const allObjects = [];
+      map.geoObjects.each((obj) => {
+        allObjects.push(obj);
+      });
+
+      for (let obj of allObjects) {
+        // Сохраняем геолокационные маркеры и пути
+        if (
+          obj.options &&
+          obj.options.get("preset") === MAP_PRESETS.GEOLOCATION
+        ) {
+          geoObjectsToKeep.push(obj);
+        } else if (obj instanceof ymaps.Polyline) {
+          geoObjectsToKeep.push(obj);
+        }
+      }
+
+      // Удаляем все объекты
+      map.geoObjects.removeAll();
+
+      // Возвращаем сохраненные объекты
+      geoObjectsToKeep.forEach((obj) => {
+        map.geoObjects.add(obj);
+      });
+
+      pointsOnMap.value = 0;
     }
 
     const placemarks = [];
     const state = map.action.getCurrentState();
     const now = Date.now();
+
+    let filteredByTime = 0;
+    let filteredByBounds = 0;
+    let totalDevices = Object.keys(devices).length;
 
     for (const index in devices) {
       const device = devices[index];
@@ -1067,10 +1106,20 @@ const renderBallons = (devices, isUpdate = false) => {
       const deviceTime = device.s_time;
       const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
 
-      if (timeDiffHours > 24) continue;
+      if (timeDiffHours > 24) {
+        filteredByTime++;
+        continue;
+      }
 
       const bounds = map.getBounds();
-      if (!isPointInBounds(device.latitude, device.longitude, bounds)) continue;
+
+      // Всегда фильтруем устройства по границам карты для оптимизации
+      if (bounds) {
+        if (!isPointInBounds(device.latitude, device.longitude, bounds)) {
+          filteredByBounds++;
+          continue;
+        }
+      }
 
       let presetcolor;
       let iconOptions = {};
@@ -1129,7 +1178,7 @@ const renderBallons = (devices, isUpdate = false) => {
           const fullContent = await createBalloonContent(device, nodeId);
           placemark.properties.set("balloonContentBody", fullContent);
         } catch (error) {
-          console.error("Ошибка загрузки содержимого баллуна:", error);
+          // Ошибка загрузки содержимого баллуна
           placemark.properties.set(
             "balloonContentBody",
             `
@@ -1148,18 +1197,25 @@ const renderBallons = (devices, isUpdate = false) => {
       placemarks.push(placemark);
     }
 
-    if (state.zoom > MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS) {
+    if (placemarks.length === 0) {
+      console.warn("⚠️ ВНИМАНИЕ: Не создано ни одного маркера!");
+    }
+
+    // Получаем зум карты с fallback
+    const currentZoom = state?.zoom || map.getZoom();
+
+    if (currentZoom > MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS) {
       placemarks.forEach((p) => {
         map.geoObjects.add(p);
 
         // Восстанавливаем открытый баллун после обновления данных
         if (
-          openedBalloonInfo &&
-          p.properties._data.nodeId === openedBalloonInfo.nodeId
+          currentOpenedBalloonInfo &&
+          p.properties._data.nodeId === currentOpenedBalloonInfo.nodeId
         ) {
           // Если у нас есть сохраненное содержимое, используем его
-          if (openedBalloonContent) {
-            p.properties.set("balloonContentBody", openedBalloonContent);
+          if (currentOpenedBalloonContent) {
+            p.properties.set("balloonContentBody", currentOpenedBalloonContent);
           }
 
           p.balloon.events.add("beforeuserclose", () => {
@@ -1192,19 +1248,19 @@ const renderBallons = (devices, isUpdate = false) => {
     map.geoObjects.add(clusterer);
 
     // Восстанавливаем открытый баллун для кластеризованных маркеров
-    if (openedBalloonInfo) {
+    if (currentOpenedBalloonInfo) {
       // Находим маркер с нужным nodeId в кластерере
       const placemarksInCluster = clusterer.getGeoObjects();
       for (let placemark of placemarksInCluster) {
         if (
           placemark.properties._data &&
-          placemark.properties._data.nodeId === openedBalloonInfo.nodeId
+          placemark.properties._data.nodeId === currentOpenedBalloonInfo.nodeId
         ) {
           // Если у нас есть сохраненное содержимое, используем его
-          if (openedBalloonContent) {
+          if (currentOpenedBalloonContent) {
             placemark.properties.set(
               "balloonContentBody",
-              openedBalloonContent
+              currentOpenedBalloonContent
             );
           }
 
@@ -1223,178 +1279,11 @@ const renderBallons = (devices, isUpdate = false) => {
       }
     }
 
-    pointsOnMap.value = placemarks.length;
+    // Для кластеризации считаем количество кластеров, а не маркеров
+    const clusters = clusterer.getClusters();
+    pointsOnMap.value = clusters.length;
   } catch (error) {
     console.error("❌ Ошибка в renderBallons:", error);
-    pointsOnMap.value = 0;
-  }
-};
-
-const renderBallonsWithState = (
-  devices,
-  openedBalloonInfo = null,
-  openedBalloonContent = null
-) => {
-  try {
-    if (!devices || Object.keys(devices).length === 0) {
-      return;
-    }
-
-    const placemarks = [];
-    const state = map.action.getCurrentState();
-    const now = Date.now();
-
-    for (const index in devices) {
-      const device = devices[index];
-      const nodeId = device.device_id || device.hex_id || device.id || index;
-
-      if (!device.latitude || !device.longitude) continue;
-
-      const deviceTime = device.s_time;
-      const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
-
-      if (timeDiffHours > 24) continue;
-
-      const bounds = map.getBounds();
-      if (!isPointInBounds(device.latitude, device.longitude, bounds)) continue;
-
-      let presetcolor;
-      let iconOptions = {};
-
-      if (timeDiffHours < 6 && (device.mqtt === "1" || device.mqtt === 1)) {
-        presetcolor = MAP_PRESETS.MQTT;
-        iconOptions = {
-          preset: `${presetcolor}`,
-        };
-      } else if (timeDiffHours < 6) {
-        presetcolor = MAP_PRESETS.ONLINE;
-        iconOptions = {
-          preset: `${presetcolor}`,
-        };
-      } else if (timeDiffHours >= 6) {
-        presetcolor = MAP_PRESETS.INACTIVE;
-        iconOptions = {
-          preset: `${presetcolor}`,
-        };
-      }
-
-      const timestampfooter = formatTime(device.s_time);
-
-      const placemark = new window.ymaps.Placemark(
-        [device.latitude, device.longitude],
-        {
-          iconContent: device.shortName,
-          balloonContentHeader: device.longName + " (" + device.shortName + ")",
-          balloonContentBody: `
-          <div style="max-width: 350px; font-size: 12px;">
-          <div style="margin-top: 8px; color: #666;">🔄 Загрузка информации об узле...</div>
-          </div>
-          `,
-          balloonContentFooter: `Updated: ${timestampfooter}`,
-          clusterCaption: `Node: <strong>${
-            device.shortName || device.short_name || nodeId
-          }</strong>`,
-          nodeId,
-        },
-        iconOptions
-      );
-
-      placemark.events.add("balloonopen", async (event) => {
-        const nodeId =
-          event.originalEvent.currentTarget.properties._data.nodeId;
-        openedNodeId = nodeId;
-        renderPath(openedNodeId);
-
-        try {
-          const fullContent = await createBalloonContent(device, nodeId);
-          placemark.properties.set("balloonContentBody", fullContent);
-        } catch (error) {
-          console.error("Ошибка загрузки содержимого баллуна:", error);
-          placemark.properties.set(
-            "balloonContentBody",
-            `
-            <div style="max-width: 350px; font-size: 12px;">
-            <div style="margin-top: 8px; color: #f44336;">❌ Ошибка загрузки данных</div>
-            </div>
-            `
-          );
-        }
-      });
-
-      placemark.events.add("balloonclose", () => {
-        openedNodeId = null;
-      });
-
-      placemarks.push(placemark);
-    }
-
-    if (state.zoom > MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS) {
-      placemarks.forEach((p) => {
-        map.geoObjects.add(p);
-
-        // Восстанавливаем открытый баллун после обновления данных
-        if (
-          openedBalloonInfo &&
-          p.properties._data.nodeId === openedBalloonInfo.nodeId
-        ) {
-          // Если у нас есть сохраненное содержимое, используем его
-          if (openedBalloonContent) {
-            p.properties.set("balloonContentBody", openedBalloonContent);
-          }
-
-          // Открываем баллун автоматически после обновления
-          setTimeout(() => {
-            p.balloon.open(undefined, undefined, {
-              balloonAutoPan: false,
-            });
-          }, 50);
-        }
-      });
-
-      pointsOnMap.value = placemarks.length;
-      return;
-    }
-
-    const clusterer = new ymaps.Clusterer({
-      preset: MAP_PRESETS.CLUSTER,
-      gridSize: MAP_CONFIG.CLUSTER_GRID_SIZE,
-      groupByCoordinates: false,
-      clusterDisableClickZoom: true,
-      clusterHideIconOnBalloonOpen: false,
-      geoObjectHideIconOnBalloonOpen: false,
-    });
-
-    clusterer.add(placemarks);
-    map.geoObjects.add(clusterer);
-
-    // Восстанавливаем открытый баллун для кластеризованных маркеров
-    if (openedBalloonInfo) {
-      const placemarksInCluster = clusterer.getGeoObjects();
-      for (let placemark of placemarksInCluster) {
-        if (
-          placemark.properties._data &&
-          placemark.properties._data.nodeId === openedBalloonInfo.nodeId
-        ) {
-          if (openedBalloonContent) {
-            placemark.properties.set(
-              "balloonContentBody",
-              openedBalloonContent
-            );
-          }
-
-          setTimeout(() => {
-            placemark.balloon.open(undefined, undefined, {
-              balloonAutoPan: false,
-            });
-          }, 50);
-          break;
-        }
-      }
-    }
-
-    pointsOnMap.value = placemarks.length;
-  } catch (error) {
-    console.error("❌ Ошибка в renderBallonsWithState:", error);
     pointsOnMap.value = 0;
   }
 };
@@ -1427,7 +1316,7 @@ const fetchDevicesData = async () => {
       emit("devicesCount", count, data.data);
 
       if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(devices.value, false);
+        debouncedRenderBallons(devices.value, false, null, null);
       }
     } else {
       devices.value = {};
@@ -1486,7 +1375,12 @@ const clearDeviceMarkers = () => {
 
   // Сохраняем геолокационные маркеры и пути
   const geoObjectsToKeep = [];
-  const allObjects = map.geoObjects.getAll();
+
+  // Получаем все геообъекты правильным способом
+  const allObjects = [];
+  map.geoObjects.each((obj) => {
+    allObjects.push(obj);
+  });
 
   for (let obj of allObjects) {
     // Сохраняем геолокационные маркеры (они имеют preset geolocation)
@@ -1521,7 +1415,7 @@ const updateDevicesData = async () => {
       emit("devicesCount", count, data.data);
 
       if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(devices.value, true);
+        debouncedRenderBallons(devices.value, true, null, null);
       }
     }
   } catch (error) {
@@ -1663,7 +1557,6 @@ onMounted(async () => {
 
     try {
       const coords = [coordinates.latitude, coordinates.longitude];
-      console.log("Фокусируем карту на устройстве:", coords);
 
       // Центрируем карту на координатах устройства с увеличенным зумом
       map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 2);
@@ -1717,13 +1610,17 @@ onMounted(async () => {
       emit("searchOpen");
     });
 
-    const onBoundsChange = async () => {
-      // Сохраняем информацию об открытом баллуне перед обновлением
+    const onBoundsChange = () => {
+      // Находим текущий открытый баллун и сохраняем его состояние
       let openedBalloonInfo = null;
       let openedBalloonContent = null;
+
       if (openedNodeId) {
-        // Находим текущий открытый баллун и сохраняем его состояние
-        const currentPlacemarks = map.geoObjects.getAll();
+        const currentPlacemarks = [];
+        map.geoObjects.each((obj) => {
+          currentPlacemarks.push(obj);
+        });
+
         for (let obj of currentPlacemarks) {
           // Проверяем обычные маркеры
           if (
@@ -1748,7 +1645,6 @@ onMounted(async () => {
                 placemark.properties &&
                 placemark.properties._data &&
                 placemark.properties._data.nodeId === openedNodeId &&
-                placemark.balloon &&
                 placemark.balloon.isOpen()
               ) {
                 openedBalloonInfo = {
@@ -1765,40 +1661,23 @@ onMounted(async () => {
         }
       }
 
-      // Загружаем новые данные при изменении границ карты
-      try {
-        geolocationStatus.value = {
-          type: "warning",
-          message: "🔄 Загрузка новых данных...",
-        };
-        await fetchDevicesData();
-        // Скрываем статус загрузки через 2 секунды
-        setTimeout(() => {
-          if (geolocationStatus.value?.type === "warning") {
-            geolocationStatus.value = null;
-          }
-        }, 2000);
-      } catch (error) {
-        geolocationStatus.value = {
-          type: "error",
-          message: "❌ Ошибка загрузки новых данных",
-        };
-        // Скрываем ошибку через 5 секунд
-        setTimeout(() => {
-          if (geolocationStatus.value?.type === "error") {
-            geolocationStatus.value = null;
-          }
-        }, 5000);
-        // Продолжаем работу с существующими данными
+      // Очищаем кэш фильтрованных устройств для новых границ
+      filteredDevicesCache.value.clear();
+
+      // Проверяем, что данные загружены и не пустые
+      if (
+        !devices ||
+        !devices.value ||
+        Object.keys(devices.value).length === 0
+      ) {
+        return;
       }
 
-      filteredDevicesCache.value.clear();
-      clearDeviceMarkers();
-      pointsOnMap.value = 0;
-
-      // Рендерим баллуны с сохранением состояния открытого баллуна
-      renderBallonsWithState(
+      // Перерисовываем маркеры с учетом новых границ карты
+      // НЕ очищаем все маркеры, а перерисовываем их
+      renderBallons(
         devices?.value,
+        false, // isUpdate = false, так как это не обновление данных
         openedBalloonInfo,
         openedBalloonContent
       );
@@ -1809,17 +1688,65 @@ onMounted(async () => {
       debounce(onBoundsChange, UI_CONFIG.DEBOUNCE_MAP_DELAY)
     );
 
-    map.events.add(
-      "zoomchange",
-      debounce(onBoundsChange, UI_CONFIG.DEBOUNCE_MAP_DELAY)
-    );
+    // Обработчик изменения зума - НЕ перерисовываем маркеры, только обновляем счетчик
+    map.events.add("zoomchange", () => {
+      // При изменении зума НЕ перерисовываем маркеры, чтобы сохранить состояние баллуна
+      // Только обновляем счетчик точек в зависимости от текущего зума
+      setTimeout(() => {
+        updatePointsCount();
+      }, 100);
+    });
+
+    // Функция для обновления только счетчика точек без перерисовки маркеров
+    const updatePointsCount = () => {
+      if (!map) return;
+
+      const currentZoom = map.getZoom();
+      let count = 0;
+
+      if (currentZoom > MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS) {
+        // При индивидуальных маркерах считаем количество маркеров
+        map.geoObjects.each((obj) => {
+          if (
+            obj.properties &&
+            obj.properties._data &&
+            obj.properties._data.nodeId
+          ) {
+            count++;
+          }
+        });
+      } else {
+        // При кластеризации считаем количество кластеров
+        map.geoObjects.each((obj) => {
+          if (obj.getGeoObjects) {
+            // Это кластер
+            const clusters = obj.getClusters();
+            count = clusters.length;
+          }
+        });
+      }
+
+      pointsOnMap.value = count;
+    };
+
+    // НЕ вызываем onBoundsChange здесь, так как данные об устройствах могут еще не загрузиться
+    // onBoundsChange будет вызван в init() после загрузки данных
   };
 
   const init = async () => {
     initYMap();
     renderSelfBallon(true);
     await fetchDevicesData();
-    debouncedRenderBallons(devices?.value);
+
+    // Добавляем небольшую задержку для инициализации карты
+    setTimeout(() => {
+      debouncedRenderBallons(devices?.value, false, null, null);
+
+      // Вызываем onBoundsChange только после загрузки данных об устройствах
+      if (devices?.value && Object.keys(devices.value).length > 0) {
+        onBoundsChange();
+      }
+    }, 100);
 
     // Слушаем событие фокусировки на устройстве
     emit("focusOnDevice", focusOnDevice);
@@ -1832,8 +1759,15 @@ onMounted(async () => {
       pointsOnMap.value = 0;
       filteredDevicesCache.value.clear();
       renderSelfBallon(false);
-      debouncedRenderBallons(newDevices);
+      debouncedRenderBallons(newDevices, false, null, null);
       renderPath(openedNodeId);
+
+      // Вызываем onBoundsChange при изменении данных об устройствах
+      if (newDevices && Object.keys(newDevices).length > 0) {
+        setTimeout(() => {
+          onBoundsChange();
+        }, 150);
+      }
     });
   };
 
@@ -1867,6 +1801,15 @@ onMounted(async () => {
 </script>
 
 <style lang="scss">
+/* Основные стили для карты */
+#map {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
+  overflow: hidden;
+}
+
 .node-counter {
   position: absolute;
   bottom: 35px;

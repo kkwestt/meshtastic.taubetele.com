@@ -101,13 +101,6 @@ const performSearch = () => {
   const query = searchQuery.value.toLowerCase();
   const results = [];
 
-  // Отладочная информация для первого устройства
-  let firstDeviceLogged = false;
-
-  // Логируем общее количество устройств
-  console.log("Всего устройств для поиска:", Object.keys(props.devices).length);
-  console.log("Запрос поиска:", query);
-
   // Поиск по всем устройствам
   for (const deviceId in props.devices) {
     const device = props.devices[deviceId];
@@ -117,51 +110,15 @@ const performSearch = () => {
       continue;
     }
 
-    // Логируем структуру первого устройства для отладки
-    if (!firstDeviceLogged) {
-      console.log("Структура первого устройства:", {
-        deviceId,
-        device,
-        allKeys: Object.keys(device),
-        hasHexId: "hex_id" in device,
-        hasDeviceId: "device_id" in device,
-        hasId: "id" in device,
-        hexIdValue: device.hex_id,
-        deviceIdValue: device.device_id,
-        idValue: device.id,
-        longNameType: typeof device.longName,
-        longNameValue: device.longName,
-        shortNameType: typeof device.shortName,
-        shortNameValue: device.shortName,
-        long_nameType: typeof device.long_name,
-        long_nameValue: device.long_name,
-        short_nameType: typeof device.short_name,
-        short_nameValue: device.short_name,
-      });
-      firstDeviceLogged = true;
-    }
-
     try {
       // Поиск по ID (числовой)
       if (device.device_id && device.device_id.toString().includes(query)) {
-        console.log(
-          "Найдено по device_id:",
-          device.device_id,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
 
       // Поиск по hex ID
       if (device.hex_id && device.hex_id.toLowerCase().includes(query)) {
-        console.log(
-          "Найдено по hex_id:",
-          device.hex_id,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
@@ -171,12 +128,6 @@ const performSearch = () => {
         device.hex_id &&
         device.hex_id.toLowerCase().replace("!", "").includes(query)
       ) {
-        console.log(
-          "Найдено по hex_id (без !):",
-          device.hex_id,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
@@ -185,12 +136,6 @@ const performSearch = () => {
       try {
         const deviceIdHex = parseInt(deviceId).toString(16);
         if (deviceIdHex.includes(query.toLowerCase())) {
-          console.log(
-            "Найдено по deviceId (hex):",
-            deviceIdHex,
-            "для устройства:",
-            deviceId
-          );
           results.push(device);
           continue;
         }
@@ -207,14 +152,6 @@ const performSearch = () => {
             device.device_id == queryDecimal ||
             device.id == queryDecimal
           ) {
-            console.log(
-              "Найдено по hex запросу в десятичном формате:",
-              query,
-              "->",
-              queryDecimal,
-              "для устройства:",
-              deviceId
-            );
             results.push(device);
             continue;
           }
@@ -229,12 +166,6 @@ const performSearch = () => {
         typeof device.longName === "string" &&
         device.longName.toLowerCase().includes(query)
       ) {
-        console.log(
-          "Найдено по longName:",
-          device.longName,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
@@ -245,12 +176,6 @@ const performSearch = () => {
         typeof device.shortName === "string" &&
         device.shortName.toLowerCase().includes(query)
       ) {
-        console.log(
-          "Найдено по shortName:",
-          device.shortName,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
@@ -261,12 +186,6 @@ const performSearch = () => {
         typeof device.long_name === "string" &&
         device.long_name.toLowerCase().includes(query)
       ) {
-        console.log(
-          "Найдено по long_name:",
-          device.long_name,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
@@ -276,18 +195,11 @@ const performSearch = () => {
         typeof device.short_name === "string" &&
         device.short_name.toLowerCase().includes(query)
       ) {
-        console.log(
-          "Найдено по short_name:",
-          device.short_name,
-          "для устройства:",
-          deviceId
-        );
         results.push(device);
         continue;
       }
 
       if (device.id && device.id.toString().includes(query)) {
-        console.log("Найдено по id:", device.id, "для устройства:", deviceId);
         results.push(device);
         continue;
       }
@@ -295,14 +207,6 @@ const performSearch = () => {
       // Дополнительный поиск по всем строковым полям
       for (const [key, value] of Object.entries(device)) {
         if (typeof value === "string" && value.toLowerCase().includes(query)) {
-          console.log(
-            "Найдено по полю",
-            key,
-            ":",
-            value,
-            "для устройства:",
-            deviceId
-          );
           results.push(device);
           break;
         }
@@ -312,21 +216,6 @@ const performSearch = () => {
       continue;
     }
   }
-
-  console.log("Результаты поиска для запроса:", query, results);
-
-  // Добавляем отладочную информацию для каждого найденного устройства
-  results.forEach((device, index) => {
-    console.log(`Устройство ${index + 1}:`, {
-      device,
-      allKeys: Object.keys(device),
-      deviceId: device?.device_id,
-      hexId: device?.hex_id,
-      id: device?.id,
-      longName: device?.longName || device?.long_name,
-      shortName: device?.shortName || device?.short_name,
-    });
-  });
 
   searchResults.value = results;
   hasSearched.value = true;
@@ -346,10 +235,8 @@ const selectDevice = (device) => {
       longitude: Number(device.longitude),
       device: device,
     };
-    console.log("Выбрано устройство с координатами:", coordinates);
     emit("selectDevice", coordinates);
   } else {
-    console.log("Выбрано устройство без координат:", device);
     emit("selectDevice", { device: device });
   }
   emit("close");
@@ -385,16 +272,6 @@ const getDeviceId = (device) => {
   }
 
   // Если стандартные поля не найдены, возвращаем "Неизвестно"
-  console.warn("Не удалось найти ID для устройства:", {
-    device,
-    allKeys: Object.keys(device),
-    hasDeviceId: "device_id" in device,
-    hasHexId: "hex_id" in device,
-    hasId: "id" in device,
-    deviceIdValue: device?.device_id,
-    hexIdValue: device?.hex_id,
-    idValue: device?.id,
-  });
 
   return "Неизвестно";
 };
@@ -460,7 +337,6 @@ const formatTime = (timestamp) => {
       });
     }
   } catch (error) {
-    console.warn("Ошибка форматирования времени:", timestamp, error);
     return "Неизвестно";
   }
 };
