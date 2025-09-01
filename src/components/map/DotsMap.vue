@@ -789,6 +789,23 @@ const createBalloonContent = async (device, nodeId) => {
       const latestTrace = tracerouteInfo.data[0];
       const rawData = latestTrace.rawData;
 
+      // Получаем информацию о целевом узле для отображения longName
+      let targetNodeLongName = null;
+      try {
+        const targetNodeInfo = await meshtasticApi.getNodeInfo(
+          latestTrace.to.toString(16)
+        );
+        if (
+          targetNodeInfo &&
+          targetNodeInfo.data &&
+          targetNodeInfo.data.length > 0
+        ) {
+          targetNodeLongName = targetNodeInfo.data[0].longName;
+        }
+      } catch (error) {
+        // Если не удалось получить информацию о целевом узле, используем hex ID
+      }
+
       // Ищем обратный маршрут (от получателя к отправителю)
       let reverseTraceroute = null;
       try {
@@ -850,14 +867,16 @@ const createBalloonContent = async (device, nodeId) => {
           }
 
           // Добавляем назначение
-          routeParts.push(`!${latestTrace.to.toString(16)}`);
+          routeParts.push(
+            targetNodeLongName || `!${latestTrace.to.toString(16)}`
+          );
 
           routeDisplay = routeParts.join(" → ");
         } else {
           // Если нет промежуточных узлов, показываем прямой маршрут
-          routeDisplay = `!${latestTrace.from.toString(
-            16
-          )} → !${latestTrace.to.toString(16)}`;
+          routeDisplay = `!${latestTrace.from.toString(16)} → ${
+            targetNodeLongName || `!${latestTrace.to.toString(16)}`
+          }`;
         }
 
         // Формируем обратный маршрут если есть
@@ -934,7 +953,9 @@ const createBalloonContent = async (device, nodeId) => {
     )}</div>
     <div style="font-size: 11px; line-height: 1.3;">
     <div style="margin-bottom: 4px; font-weight: 600; color: #1f2937;">
-      От: !${latestTrace.from.toString(16)} → К: !${latestTrace.to.toString(16)}
+      От: !${latestTrace.from.toString(16)} → К: ${
+          targetNodeLongName || `!${latestTrace.to.toString(16)}`
+        }
     </div>
     ${
       routeDisplay
@@ -1195,10 +1216,6 @@ const renderBallons = (
       });
 
       placemarks.push(placemark);
-    }
-
-    if (placemarks.length === 0) {
-      console.warn("⚠️ ВНИМАНИЕ: Не создано ни одного маркера!");
     }
 
     // Получаем зум карты с fallback
