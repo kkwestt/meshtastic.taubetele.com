@@ -175,6 +175,39 @@ const formatTime = (timestamp) => {
   }
 };
 
+// Функция для получения longname по hex ID
+const getGatewayLongName = async (hexId) => {
+  if (!hexId) return null;
+
+  try {
+    // Конвертируем hex ID в numeric
+    const numericId = parseInt(hexId.replace("!", ""), 16);
+
+    // Делаем запрос к API для получения информации об узле
+    const response = await fetch(
+      `https://meshtasticback.taubetele.com/NODEINFO_APP:${numericId}`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.data && data.data.length > 0) {
+        // Берем последнюю запись (первую в массиве, так как они отсортированы по времени)
+        const latestNodeInfo = data.data[0];
+        // Ищем long_name в rawData
+        if (latestNodeInfo.rawData && latestNodeInfo.rawData.long_name) {
+          return latestNodeInfo.rawData.long_name;
+        }
+        // Fallback к другим полям
+        return latestNodeInfo.longName || latestNodeInfo.long_name || hexId;
+      }
+    }
+  } catch (error) {
+    console.warn("Ошибка получения longname для gateway:", hexId, error);
+  }
+
+  return hexId; // Возвращаем исходный hex ID если не удалось получить longname
+};
+
 const createBalloonContent = async (device, nodeId) => {
   let nodeInfoHtml = "";
   let positionInfoHtml = "";
@@ -228,8 +261,13 @@ const createBalloonContent = async (device, nodeId) => {
         if (latestInfo.rxSnr !== undefined && latestInfo.rxRssi !== undefined) {
           if (latestInfo.rxSnr === 0 && latestInfo.rxRssi === 0) {
             // Данные через MQTT - показываем в одной строке с Gateway
+            const gatewayLongName = latestInfo.gatewayId
+              ? await getGatewayLongName(latestInfo.gatewayId)
+              : null;
             const mqttLine = `Данные: Через MQTT${
-              latestInfo.gatewayId ? ` | Gateway: ${latestInfo.gatewayId}` : ""
+              gatewayLongName
+                ? ` | Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestInfo.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a>`
+                : ""
             }`;
             nodeInfoHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
@@ -251,12 +289,15 @@ const createBalloonContent = async (device, nodeId) => {
             }
 
             if (nodeMetrics.length > 0) {
+              const gatewayLongName = latestInfo.gatewayId
+                ? await getGatewayLongName(latestInfo.gatewayId)
+                : null;
               nodeInfoHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
     <div>${nodeMetrics.join(" | ")}</div>
     ${
-      latestInfo.gatewayId
-        ? `<div style="margin-top: 1px;">Gateway: ${latestInfo.gatewayId}</div>`
+      gatewayLongName
+        ? `<div style="margin-top: 1px;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestInfo.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a></div>`
         : ""
     }
     </div>
@@ -311,9 +352,12 @@ const createBalloonContent = async (device, nodeId) => {
       ) {
         if (latestPosition.rxSnr === 0 && latestPosition.rxRssi === 0) {
           // Данные через MQTT - показываем в одной строке с Gateway
+          const gatewayLongName = latestPosition.gatewayId
+            ? await getGatewayLongName(latestPosition.gatewayId)
+            : null;
           const mqttLine = `Данные: Через MQTT${
-            latestPosition.gatewayId
-              ? ` | Gateway: ${latestPosition.gatewayId}`
+            gatewayLongName
+              ? ` | Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestPosition.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a>`
               : ""
           }`;
           positionInfoHtml += `
@@ -337,12 +381,15 @@ const createBalloonContent = async (device, nodeId) => {
           }
 
           if (positionMetrics.length > 0) {
+            const gatewayLongName = latestPosition.gatewayId
+              ? await getGatewayLongName(latestPosition.gatewayId)
+              : null;
             positionInfoHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
     <div>${positionMetrics.join(" | ")}</div>
     ${
-      latestPosition.gatewayId
-        ? `<div style="margin-top: 1px;">Gateway: ${latestPosition.gatewayId}</div>`
+      gatewayLongName
+        ? `<div style="margin-top: 1px;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestPosition.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a></div>`
         : ""
     }
     </div>
@@ -452,9 +499,12 @@ const createBalloonContent = async (device, nodeId) => {
             latestDeviceMetrics.rxRssi === 0
           ) {
             // Данные через MQTT - показываем в одной строке с Gateway
+            const gatewayLongName = latestDeviceMetrics.gatewayId
+              ? await getGatewayLongName(latestDeviceMetrics.gatewayId)
+              : null;
             const mqttLine = `Данные: Через MQTT${
-              latestDeviceMetrics.gatewayId
-                ? ` | Gateway: ${latestDeviceMetrics.gatewayId}`
+              gatewayLongName
+                ? ` | Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestDeviceMetrics.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a>`
                 : ""
             }`;
             deviceMetricsHtml += `
@@ -478,12 +528,15 @@ const createBalloonContent = async (device, nodeId) => {
             }
 
             if (deviceMetrics.length > 0) {
+              const gatewayLongName = latestDeviceMetrics.gatewayId
+                ? await getGatewayLongName(latestDeviceMetrics.gatewayId)
+                : null;
               deviceMetricsHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
     <div>${deviceMetrics.join(" | ")}</div>
     ${
-      latestDeviceMetrics.gatewayId
-        ? `<div style="margin-top: 1px;">Gateway: ${latestDeviceMetrics.gatewayId}</div>`
+      gatewayLongName
+        ? `<div style="margin-top: 1px;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestDeviceMetrics.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a></div>`
         : ""
     }
     </div>
@@ -543,9 +596,12 @@ const createBalloonContent = async (device, nodeId) => {
             latestEnvironmentMetrics.rxRssi === 0
           ) {
             // Данные через MQTT - показываем в одной строке с Gateway
+            const gatewayLongName = latestEnvironmentMetrics.gatewayId
+              ? await getGatewayLongName(latestEnvironmentMetrics.gatewayId)
+              : null;
             const mqttLine = `Данные: Через MQTT${
-              latestEnvironmentMetrics.gatewayId
-                ? ` | Gateway: ${latestEnvironmentMetrics.gatewayId}`
+              gatewayLongName
+                ? ` | Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestEnvironmentMetrics.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a>`
                 : ""
             }`;
             environmentMetricsHtml += `
@@ -569,12 +625,15 @@ const createBalloonContent = async (device, nodeId) => {
             }
 
             if (envMetrics.length > 0) {
+              const gatewayLongName = latestEnvironmentMetrics.gatewayId
+                ? await getGatewayLongName(latestEnvironmentMetrics.gatewayId)
+                : null;
               environmentMetricsHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
     <div>${envMetrics.join(" | ")}</div>
     ${
-      latestEnvironmentMetrics.gatewayId
-        ? `<div style="margin-top: 1px;">Gateway: ${latestEnvironmentMetrics.gatewayId}</div>`
+      gatewayLongName
+        ? `<div style="margin-top: 1px;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestEnvironmentMetrics.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a></div>`
         : ""
     }
     </div>
@@ -627,9 +686,12 @@ const createBalloonContent = async (device, nodeId) => {
         ) {
           if (latestMessage.rxSnr === 0 && latestMessage.rxRssi === 0) {
             // Данные через MQTT - показываем в одной строке с Gateway
+            const gatewayLongName = latestMessage.gatewayId
+              ? await getGatewayLongName(latestMessage.gatewayId)
+              : null;
             const mqttLine = `Данные: Через MQTT${
-              latestMessage.gatewayId
-                ? ` | Gateway: ${latestMessage.gatewayId}`
+              gatewayLongName
+                ? ` | Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestMessage.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a>`
                 : ""
             }`;
             textMessagesHtml += `
@@ -653,12 +715,15 @@ const createBalloonContent = async (device, nodeId) => {
             }
 
             if (messageMetrics.length > 0) {
+              const gatewayLongName = latestMessage.gatewayId
+                ? await getGatewayLongName(latestMessage.gatewayId)
+                : null;
               textMessagesHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
     <div>${messageMetrics.join(" | ")}</div>
     ${
-      latestMessage.gatewayId
-        ? `<div style="margin-top: 1px;">Gateway: ${latestMessage.gatewayId}</div>`
+      gatewayLongName
+        ? `<div style="margin-top: 1px;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestMessage.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a></div>`
         : ""
     }
     </div>
@@ -737,9 +802,12 @@ const createBalloonContent = async (device, nodeId) => {
         ) {
           if (latestReport.rxSnr === 0 && latestReport.rxRssi === 0) {
             // Данные через MQTT - показываем в одной строке с Gateway
+            const gatewayLongName = latestReport.gatewayId
+              ? await getGatewayLongName(latestReport.gatewayId)
+              : null;
             const mqttLine = `Данные: Через MQTT${
-              latestReport.gatewayId
-                ? ` | Gateway: ${latestReport.gatewayId}`
+              gatewayLongName
+                ? ` | Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestReport.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a>`
                 : ""
             }`;
             mapReportHtml += `
@@ -758,12 +826,15 @@ const createBalloonContent = async (device, nodeId) => {
               reportMetrics.push(`Hops: ${latestReport.hopLimit}`);
 
             if (reportMetrics.length > 0) {
+              const gatewayLongName = latestReport.gatewayId
+                ? await getGatewayLongName(latestReport.gatewayId)
+                : null;
               mapReportHtml += `
     <div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">
     <div>${reportMetrics.join(" | ")}</div>
     ${
-      latestReport.gatewayId
-        ? `<div style="margin-top: 1px;">Gateway: ${latestReport.gatewayId}</div>`
+      gatewayLongName
+        ? `<div style="margin-top: 1px;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${latestReport.gatewayId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayLongName}</a></div>`
         : ""
     }
     </div>
@@ -854,29 +925,42 @@ const createBalloonContent = async (device, nodeId) => {
           const routeParts = [];
 
           // Добавляем источник
-          routeParts.push(`!${latestTrace.from.toString(16)}`);
+          const fromHex = `!${latestTrace.from.toString(16)}`;
+          const fromLongName = await getGatewayLongName(fromHex);
+          routeParts.push(
+            `<a href="#" onclick="focusOnDeviceByHex('${fromHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${fromLongName}</a>`
+          );
 
           // Добавляем промежуточные узлы с SNR
           for (let i = 0; i < rawData.route.length; i++) {
             const nodeHex = `!${rawData.route[i].toString(16)}`;
+            const nodeLongName = await getGatewayLongName(nodeHex);
             const snr =
               rawData.snr_towards && rawData.snr_towards[i]
                 ? `(${rawData.snr_towards[i]}dB)`
                 : "";
-            routeParts.push(`${nodeHex}${snr}`);
+            routeParts.push(
+              `<a href="#" onclick="focusOnDeviceByHex('${nodeHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${nodeLongName}</a>${snr}`
+            );
           }
 
           // Добавляем назначение
+          const toHex = `!${latestTrace.to.toString(16)}`;
+          const toLongName =
+            targetNodeLongName || (await getGatewayLongName(toHex));
           routeParts.push(
-            targetNodeLongName || `!${latestTrace.to.toString(16)}`
+            `<a href="#" onclick="focusOnDeviceByHex('${toHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${toLongName}</a>`
           );
 
           routeDisplay = routeParts.join(" → ");
         } else {
           // Если нет промежуточных узлов, показываем прямой маршрут
-          routeDisplay = `!${latestTrace.from.toString(16)} → ${
-            targetNodeLongName || `!${latestTrace.to.toString(16)}`
-          }`;
+          const fromHex = `!${latestTrace.from.toString(16)}`;
+          const fromLongName = await getGatewayLongName(fromHex);
+          const toHex = `!${latestTrace.to.toString(16)}`;
+          const toLongName =
+            targetNodeLongName || (await getGatewayLongName(toHex));
+          routeDisplay = `<a href="#" onclick="focusOnDeviceByHex('${fromHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${fromLongName}</a> → <a href="#" onclick="focusOnDeviceByHex('${toHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${toLongName}</a>`;
         }
 
         // Формируем обратный маршрут если есть
@@ -891,23 +975,34 @@ const createBalloonContent = async (device, nodeId) => {
           const backParts = [];
 
           // Добавляем источник (получатель исходного traceroute)
-          backParts.push(`!${reverseTraceroute.from.toString(16)}`);
+          const reverseFromHex = `!${reverseTraceroute.from.toString(16)}`;
+          const reverseFromLongName = await getGatewayLongName(reverseFromHex);
+          backParts.push(
+            `<a href="#" onclick="focusOnDeviceByHex('${reverseFromHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${reverseFromLongName}</a>`
+          );
 
           // Добавляем промежуточные узлы с SNR
           for (let i = 0; i < reverseTraceroute.rawData.route.length; i++) {
             const nodeHex = `!${reverseTraceroute.rawData.route[i].toString(
               16
             )}`;
+            const nodeLongName = await getGatewayLongName(nodeHex);
             const snr =
               reverseTraceroute.rawData.snr_towards &&
               reverseTraceroute.rawData.snr_towards[i]
                 ? `(${reverseTraceroute.rawData.snr_towards[i]}dB)`
                 : "";
-            backParts.push(`${nodeHex}${snr}`);
+            backParts.push(
+              `<a href="#" onclick="focusOnDeviceByHex('${nodeHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${nodeLongName}</a>${snr}`
+            );
           }
 
           // Добавляем назначение (отправитель исходного traceroute)
-          backParts.push(`!${reverseTraceroute.to.toString(16)}`);
+          const reverseToHex = `!${reverseTraceroute.to.toString(16)}`;
+          const reverseToLongName = await getGatewayLongName(reverseToHex);
+          backParts.push(
+            `<a href="#" onclick="focusOnDeviceByHex('${reverseToHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${reverseToLongName}</a>`
+          );
 
           backRouteDisplay = backParts.join(" → ");
         } else if (rawData.route_back && rawData.route_back.length > 0) {
@@ -915,20 +1010,31 @@ const createBalloonContent = async (device, nodeId) => {
           const backParts = [];
 
           // Добавляем назначение исходного traceroute (откуда идет обратный маршрут)
-          backParts.push(`!${latestTrace.to.toString(16)}`);
+          const toHex = `!${latestTrace.to.toString(16)}`;
+          const toLongName = await getGatewayLongName(toHex);
+          backParts.push(
+            `<a href="#" onclick="focusOnDeviceByHex('${toHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${toLongName}</a>`
+          );
 
           // Добавляем промежуточные узлы с SNR
           for (let i = 0; i < rawData.route_back.length; i++) {
             const nodeHex = `!${rawData.route_back[i].toString(16)}`;
+            const nodeLongName = await getGatewayLongName(nodeHex);
             const snr =
               rawData.snr_back && rawData.snr_back[i]
                 ? `(${rawData.snr_back[i]}dB)`
                 : "";
-            backParts.push(`${nodeHex}${snr}`);
+            backParts.push(
+              `<a href="#" onclick="focusOnDeviceByHex('${nodeHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${nodeLongName}</a>${snr}`
+            );
           }
 
           // Добавляем источник исходного traceroute (куда идет обратный маршрут)
-          backParts.push(`!${latestTrace.from.toString(16)}`);
+          const fromHex = `!${latestTrace.from.toString(16)}`;
+          const fromLongName = await getGatewayLongName(fromHex);
+          backParts.push(
+            `<a href="#" onclick="focusOnDeviceByHex('${fromHex}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${fromLongName}</a>`
+          );
 
           backRouteDisplay = backParts.join(" → ");
         } else {
@@ -953,9 +1059,16 @@ const createBalloonContent = async (device, nodeId) => {
     )}</div>
     <div style="font-size: 11px; line-height: 1.3;">
     <div style="margin-bottom: 4px; font-weight: 600; color: #1f2937;">
-      От: !${latestTrace.from.toString(16)} → К: ${
-          targetNodeLongName || `!${latestTrace.to.toString(16)}`
-        }
+      От: <a href="#" onclick="focusOnDeviceByHex('!${latestTrace.from.toString(
+        16
+      )}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${await getGatewayLongName(
+          `!${latestTrace.from.toString(16)}`
+        )}</a> → К: <a href="#" onclick="focusOnDeviceByHex('!${latestTrace.to.toString(
+          16
+        )}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${
+          targetNodeLongName ||
+          (await getGatewayLongName(`!${latestTrace.to.toString(16)}`))
+        }</a>
     </div>
     ${
       routeDisplay
@@ -974,7 +1087,11 @@ const createBalloonContent = async (device, nodeId) => {
     }
     ${
       latestTrace.gatewayId
-        ? `<div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">Gateway: ${latestTrace.gatewayId} </div>`
+        ? `<div style="font-size: 10px; color: #666; margin: 0; line-height: 1.2;">Gateway: <a href="#" onclick="focusOnDeviceByHex('${
+            latestTrace.gatewayId
+          }'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${await getGatewayLongName(
+            latestTrace.gatewayId
+          )}</a> </div>`
         : ""
     }
     ${
@@ -1458,9 +1575,12 @@ onMounted(async () => {
 
   onUnmounted(() => {
     stopDataUpdates();
-    // Очищаем глобальную функцию фокусировки
+    // Очищаем глобальные функции фокусировки
     if (window.focusOnDevice) {
       delete window.focusOnDevice;
+    }
+    if (window.focusOnDeviceByHex) {
+      delete window.focusOnDeviceByHex;
     }
   });
 
@@ -1680,6 +1800,141 @@ onMounted(async () => {
     }
   };
 
+  // Функция для фокусировки на устройстве по hex ID
+  const focusOnDeviceByHex = async (hexId) => {
+    if (!map || !hexId) return;
+
+    try {
+      // Конвертируем hex ID в numeric
+      const numericId = parseInt(hexId.replace("!", ""), 16);
+
+      // Ищем устройство в данных
+      let targetDevice = null;
+      let targetDeviceKey = null;
+
+      for (const deviceKey in devices.value) {
+        const device = devices.value[deviceKey];
+        if (
+          device.device_id === numericId ||
+          device.hex_id === hexId ||
+          device.id === numericId ||
+          deviceKey === numericId.toString()
+        ) {
+          targetDevice = device;
+          targetDeviceKey = deviceKey;
+          break;
+        }
+      }
+
+      if (targetDevice && targetDevice.latitude && targetDevice.longitude) {
+        // Фокусируемся на устройстве
+        const coordinates = {
+          latitude: Number(targetDevice.latitude),
+          longitude: Number(targetDevice.longitude),
+          device: targetDevice,
+          deviceKey: targetDeviceKey,
+        };
+
+        // Центрируем карту
+        const coords = [coordinates.latitude, coordinates.longitude];
+        map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 7);
+
+        // Открываем баллун
+        setTimeout(() => {
+          openDeviceBalloon(coordinates);
+        }, 500);
+
+        console.log("Фокусировка на устройстве по hex ID:", hexId);
+      } else {
+        console.warn(
+          "Устройство с hex ID не найдено или нет координат:",
+          hexId
+        );
+        geolocationStatus.value = {
+          type: "warning",
+          message: "Устройство не найдено на карте",
+        };
+        setTimeout(() => {
+          if (geolocationStatus.value?.type === "warning") {
+            geolocationStatus.value = null;
+          }
+        }, 3000);
+      }
+    } catch (error) {
+      console.error("Ошибка фокусировки по hex ID:", error);
+    }
+  };
+
+  // Define onBoundsChange function outside initYMap so it can be accessed from init
+  const onBoundsChange = () => {
+    // Находим текущий открытый баллун и сохраняем его состояние
+    let openedBalloonInfo = null;
+    let openedBalloonContent = null;
+
+    if (openedNodeId) {
+      const currentPlacemarks = [];
+      map.geoObjects.each((obj) => {
+        currentPlacemarks.push(obj);
+      });
+
+      for (let obj of currentPlacemarks) {
+        // Проверяем обычные маркеры
+        if (
+          obj.properties &&
+          obj.properties._data &&
+          obj.properties._data.nodeId === openedNodeId &&
+          obj.balloon &&
+          obj.balloon.isOpen()
+        ) {
+          openedBalloonInfo = {
+            nodeId: openedNodeId,
+            isOpen: true,
+          };
+          openedBalloonContent = obj.properties.get("balloonContentBody");
+          break;
+        }
+        // Проверяем кластеры
+        else if (obj.getGeoObjects) {
+          const placemarksInCluster = obj.getGeoObjects();
+          for (let placemark of placemarksInCluster) {
+            if (
+              placemark.properties &&
+              placemark.properties._data &&
+              placemark.properties._data.nodeId === openedNodeId &&
+              placemark.balloon.isOpen()
+            ) {
+              openedBalloonInfo = {
+                nodeId: openedNodeId,
+                isOpen: true,
+              };
+              openedBalloonContent =
+                placemark.properties.get("balloonContentBody");
+              break;
+            }
+          }
+          if (openedBalloonInfo) break;
+        }
+      }
+    }
+
+    // Очищаем кэш фильтрованных устройств для новых границ
+    filteredDevicesCache.value.clear();
+
+    // Проверяем, что данные загружены и не пустые
+    if (!devices || !devices.value || Object.keys(devices.value).length === 0) {
+      return;
+    }
+
+    // Перерисовываем маркеры с учетом новых границ карты
+    // НЕ очищаем все маркеры, а перерисовываем их
+    renderBallons(
+      devices?.value,
+      false, // isUpdate = false, так как это не обновление данных
+      openedBalloonInfo,
+      openedBalloonContent
+    );
+  };
+
   const initYMap = () => {
     map = new ymaps.Map("map", {
       center: MAP_CONFIG.DEFAULT_CENTER,
@@ -1707,79 +1962,6 @@ onMounted(async () => {
     searchButton.events.add("click", function () {
       emit("searchOpen");
     });
-
-    const onBoundsChange = () => {
-      // Находим текущий открытый баллун и сохраняем его состояние
-      let openedBalloonInfo = null;
-      let openedBalloonContent = null;
-
-      if (openedNodeId) {
-        const currentPlacemarks = [];
-        map.geoObjects.each((obj) => {
-          currentPlacemarks.push(obj);
-        });
-
-        for (let obj of currentPlacemarks) {
-          // Проверяем обычные маркеры
-          if (
-            obj.properties &&
-            obj.properties._data &&
-            obj.properties._data.nodeId === openedNodeId &&
-            obj.balloon &&
-            obj.balloon.isOpen()
-          ) {
-            openedBalloonInfo = {
-              nodeId: openedNodeId,
-              isOpen: true,
-            };
-            openedBalloonContent = obj.properties.get("balloonContentBody");
-            break;
-          }
-          // Проверяем кластеры
-          else if (obj.getGeoObjects) {
-            const placemarksInCluster = obj.getGeoObjects();
-            for (let placemark of placemarksInCluster) {
-              if (
-                placemark.properties &&
-                placemark.properties._data &&
-                placemark.properties._data.nodeId === openedNodeId &&
-                placemark.balloon.isOpen()
-              ) {
-                openedBalloonInfo = {
-                  nodeId: openedNodeId,
-                  isOpen: true,
-                };
-                openedBalloonContent =
-                  placemark.properties.get("balloonContentBody");
-                break;
-              }
-            }
-            if (openedBalloonInfo) break;
-          }
-        }
-      }
-
-      // Очищаем кэш фильтрованных устройств для новых границ
-      filteredDevicesCache.value.clear();
-
-      // Проверяем, что данные загружены и не пустые
-      if (
-        !devices ||
-        !devices.value ||
-        Object.keys(devices.value).length === 0
-      ) {
-        return;
-      }
-
-      // Перерисовываем маркеры с учетом новых границ карты
-      // НЕ очищаем все маркеры, а перерисовываем их
-      renderBallons(
-        devices?.value,
-        false, // isUpdate = false, так как это не обновление данных
-        openedBalloonInfo,
-        openedBalloonContent
-      );
-    };
 
     map.events.add(
       "boundschange",
@@ -1849,8 +2031,9 @@ onMounted(async () => {
     // Слушаем событие фокусировки на устройстве
     emit("focusOnDevice", focusOnDevice);
 
-    // Делаем функцию фокусировки доступной глобально
+    // Делаем функции фокусировки доступными глобально
     window.focusOnDevice = focusOnDevice;
+    window.focusOnDeviceByHex = focusOnDeviceByHex;
 
     watch(devices, (newDevices) => {
       map.geoObjects?.removeAll();
