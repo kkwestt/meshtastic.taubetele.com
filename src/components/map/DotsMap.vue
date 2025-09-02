@@ -13,11 +13,11 @@
         >
           Кластеров: {{ pointsOnMap }}
         </span>
-        <span v-else> Маркеров: {{ pointsOnMap }} </span>
+        <span v-else> Видимых: {{ pointsOnMap }} </span>
       </span>
       <div class="update-indicator" v-if="updateInterval">
         <span class="update-dot"></span>
-        <span class="update-text">Автообновление</span>
+        <span class="update-text">Автообновление 60сек</span>
       </div>
     </div>
 
@@ -1560,7 +1560,7 @@ onMounted(async () => {
     );
   };
 
-  // Функция для фокусировки карты на устройстве
+  // Функция для фокусировки карты на устройстве и открытия баллуна
   const focusOnDevice = (coordinates) => {
     if (
       !map ||
@@ -1576,7 +1576,7 @@ onMounted(async () => {
       const coords = [coordinates.latitude, coordinates.longitude];
 
       // Центрируем карту на координатах устройства с увеличенным зумом
-      map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 2);
+      map.setCenter(coords, MAP_CONFIG.DEFAULT_ZOOM + 7);
 
       // Показываем статус успешной фокусировки
       geolocationStatus.value = {
@@ -1590,12 +1590,93 @@ onMounted(async () => {
           geolocationStatus.value = null;
         }
       }, 3000);
+
+      // Ищем маркер устройства и открываем его баллун
+      setTimeout(() => {
+        openDeviceBalloon(coordinates);
+      }, 500); // Небольшая задержка для завершения анимации карты
     } catch (error) {
       console.error("Ошибка фокусировки на устройстве:", error);
       geolocationStatus.value = {
         type: "error",
         message: "Ошибка фокусировки на устройстве",
       };
+    }
+  };
+
+  // Функция для открытия баллуна найденного устройства
+  const openDeviceBalloon = (coordinates) => {
+    if (!map || !coordinates) return;
+
+    try {
+      // Получаем nodeId из координат (может быть в device.device_id, device.hex_id или deviceKey)
+      const nodeId =
+        coordinates.device?.device_id ||
+        coordinates.device?.hex_id ||
+        coordinates.deviceKey ||
+        coordinates.device?.id;
+
+      if (!nodeId) {
+        console.warn("Не удалось найти nodeId для устройства:", coordinates);
+        return;
+      }
+
+      // Ищем маркер с нужным nodeId
+      let targetPlacemark = null;
+
+      // Проверяем все геообъекты на карте
+      map.geoObjects.each((obj) => {
+        // Проверяем обычные маркеры
+        if (
+          obj.properties &&
+          obj.properties._data &&
+          obj.properties._data.nodeId === nodeId.toString()
+        ) {
+          targetPlacemark = obj;
+          return false; // Прерываем итерацию
+        }
+        // Проверяем кластеры
+        else if (obj.getGeoObjects) {
+          const placemarksInCluster = obj.getGeoObjects();
+          for (let placemark of placemarksInCluster) {
+            if (
+              placemark.properties &&
+              placemark.properties._data &&
+              placemark.properties._data.nodeId === nodeId.toString()
+            ) {
+              targetPlacemark = placemark;
+              return false; // Прерываем итерацию
+            }
+          }
+        }
+      });
+
+      if (targetPlacemark) {
+        // Устанавливаем openedNodeId для отслеживания
+        openedNodeId = nodeId.toString();
+
+        // Открываем баллун
+        targetPlacemark.balloon.open(undefined, undefined, {
+          balloonAutoPan: false,
+        });
+
+        console.log("Баллун открыт для устройства:", nodeId);
+      } else {
+        console.warn("Маркер устройства не найден на карте:", nodeId);
+        // Показываем сообщение пользователю
+        geolocationStatus.value = {
+          type: "warning",
+          message:
+            "Устройство найдено, но не отображается на карте (возможно, вне текущих границ)",
+        };
+        setTimeout(() => {
+          if (geolocationStatus.value?.type === "warning") {
+            geolocationStatus.value = null;
+          }
+        }, 5000);
+      }
+    } catch (error) {
+      console.error("Ошибка открытия баллуна устройства:", error);
     }
   };
 

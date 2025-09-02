@@ -26,23 +26,29 @@
 
         <div class="results-list">
           <div
-            v-for="device in searchResults"
-            :key="getDeviceKey(device)"
+            v-for="result in searchResults"
+            :key="getDeviceKey(result.device)"
             class="device-item"
-            @click="selectDevice(device)"
+            @click="selectDevice(result.device, result.deviceKey)"
           >
             <div class="device-header">
-              <span class="device-name">{{ getDeviceName(device) }}</span>
-              <span class="device-short">{{ getDeviceShortName(device) }}</span>
+              <span class="device-name">{{
+                getDeviceName(result.device)
+              }}</span>
+              <span class="device-short">{{
+                getDeviceShortName(result.device)
+              }}</span>
             </div>
             <div class="device-details">
-              <span class="device-time">{{ formatTime(device.s_time) }}</span>
+              <span class="device-time">{{
+                formatTime(result.device.s_time)
+              }}</span>
             </div>
             <!-- Debug section removed -->
 
-            <div class="device-location" v-if="hasValidLocation(device)">
-              📍 {{ formatCoordinate(device.latitude) }},
-              {{ formatCoordinate(device.longitude) }}
+            <div class="device-location" v-if="hasValidLocation(result.device)">
+              📍 {{ formatCoordinate(result.device.latitude) }},
+              {{ formatCoordinate(result.device.longitude) }}
             </div>
           </div>
         </div>
@@ -113,13 +119,13 @@ const performSearch = () => {
     try {
       // Поиск по ID (числовой)
       if (device.device_id && device.device_id.toString().includes(query)) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
       // Поиск по hex ID
       if (device.hex_id && device.hex_id.toLowerCase().includes(query)) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
@@ -128,7 +134,7 @@ const performSearch = () => {
         device.hex_id &&
         device.hex_id.toLowerCase().replace("!", "").includes(query)
       ) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
@@ -136,7 +142,7 @@ const performSearch = () => {
       try {
         const deviceIdHex = parseInt(deviceId).toString(16);
         if (deviceIdHex.includes(query.toLowerCase())) {
-          results.push(device);
+          results.push({ device, deviceKey: deviceId });
           continue;
         }
       } catch (e) {
@@ -152,7 +158,7 @@ const performSearch = () => {
             device.device_id == queryDecimal ||
             device.id == queryDecimal
           ) {
-            results.push(device);
+            results.push({ device, deviceKey: deviceId });
             continue;
           }
         } catch (e) {
@@ -166,7 +172,7 @@ const performSearch = () => {
         typeof device.longName === "string" &&
         device.longName.toLowerCase().includes(query)
       ) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
@@ -176,7 +182,7 @@ const performSearch = () => {
         typeof device.shortName === "string" &&
         device.shortName.toLowerCase().includes(query)
       ) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
@@ -186,7 +192,7 @@ const performSearch = () => {
         typeof device.long_name === "string" &&
         device.long_name.toLowerCase().includes(query)
       ) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
@@ -195,19 +201,19 @@ const performSearch = () => {
         typeof device.short_name === "string" &&
         device.short_name.toLowerCase().includes(query)
       ) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
       if (device.id && device.id.toString().includes(query)) {
-        results.push(device);
+        results.push({ device, deviceKey: deviceId });
         continue;
       }
 
       // Дополнительный поиск по всем строковым полям
       for (const [key, value] of Object.entries(device)) {
         if (typeof value === "string" && value.toLowerCase().includes(query)) {
-          results.push(device);
+          results.push({ device, deviceKey: deviceId });
           break;
         }
       }
@@ -227,17 +233,21 @@ const clearResults = () => {
   searchQuery.value = "";
 };
 
-const selectDevice = (device) => {
+const selectDevice = (device, deviceKey) => {
   // Проверяем, есть ли у устройства валидные координаты
   if (hasValidLocation(device)) {
     const coordinates = {
       latitude: Number(device.latitude),
       longitude: Number(device.longitude),
       device: device,
+      deviceKey: deviceKey, // Передаем ключ устройства
     };
+
     emit("selectDevice", coordinates);
   } else {
-    emit("selectDevice", { device: device });
+    // Если нет координат, все равно передаем устройство для возможного отображения информации
+
+    emit("selectDevice", { device: device, deviceKey: deviceKey });
   }
   emit("close");
 };
