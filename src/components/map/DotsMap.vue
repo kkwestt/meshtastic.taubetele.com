@@ -27,6 +27,14 @@
         geolocationStatus.message
       }}</span>
     </div>
+
+    <!-- Chart Modal -->
+    <ChartModal
+      v-if="showChartModal"
+      :nodeId="selectedNodeId"
+      :deviceName="selectedDeviceName"
+      @close="closeChartModal"
+    />
   </div>
 </template>
 
@@ -39,9 +47,11 @@ import {
   HARDWARE_MODELS,
   DEVICE_ROLES,
   REGIONS,
+  ICONS,
 } from "../../utils/constants.js";
 import { debounce, isPointInBounds } from "../../utils/helpers.js";
 import { meshtasticApi } from "../../utils/api.js";
+import ChartModal from "../ChartModal.vue";
 
 const emit = defineEmits([
   "infoOpen",
@@ -71,6 +81,9 @@ const pointsOnMap = ref(0);
 const filteredDevicesCache = ref(new Map());
 const geolocationStatus = ref(null);
 const isDataLoaded = ref(false); // Флаг загрузки данных
+const showChartModal = ref(false);
+const selectedNodeId = ref(null);
+const selectedDeviceName = ref("");
 
 const clearGeolocationStatus = () => {
   setTimeout(() => {
@@ -208,6 +221,27 @@ const getGatewayLongName = async (hexId) => {
   return hexId; // Возвращаем исходный hex ID если не удалось получить longname
 };
 
+// Function to open chart modal
+const openChartModal = (nodeId, deviceName) => {
+  // Close any open balloon first
+  if (map) {
+    map.balloon.close();
+  }
+  selectedNodeId.value = nodeId;
+  selectedDeviceName.value = deviceName;
+  showChartModal.value = true;
+};
+
+// Function to close chart modal
+const closeChartModal = () => {
+  showChartModal.value = false;
+  selectedNodeId.value = null;
+  selectedDeviceName.value = "";
+};
+
+// Make function available globally for onclick handlers
+window.openChartModal = openChartModal;
+
 const createBalloonContent = async (device, nodeId) => {
   let nodeInfoHtml = "";
   let positionInfoHtml = "";
@@ -215,10 +249,12 @@ const createBalloonContent = async (device, nodeId) => {
   let textMessagesHtml = "";
   let mapReportHtml = "";
   let tracerouteHtml = "";
+  let hasAnyData = false;
 
   try {
     const nodeInfo = await meshtasticApi.getNodeInfo(nodeId);
     if (nodeInfo && nodeInfo.data && nodeInfo.data.length > 0) {
+      hasAnyData = true;
       // Берем последнюю запись (самую свежую)
       const latestInfo = nodeInfo.data[0];
       const rawData = latestInfo.rawData;
@@ -314,6 +350,7 @@ const createBalloonContent = async (device, nodeId) => {
   try {
     const positionInfo = await meshtasticApi.getPositionInfo(nodeId);
     if (positionInfo && positionInfo.data && positionInfo.data.length > 0) {
+      hasAnyData = true;
       // Берем последнюю запись (самую свежую)
       const latestPosition = positionInfo.data[0];
 
@@ -405,6 +442,7 @@ const createBalloonContent = async (device, nodeId) => {
   try {
     const telemetryInfo = await meshtasticApi.getTelemetryInfo(nodeId);
     if (telemetryInfo && telemetryInfo.data && telemetryInfo.data.length > 0) {
+      hasAnyData = true;
       // Разделяем данные по типам
       let deviceMetricsData = null;
       let environmentMetricsData = null;
@@ -652,6 +690,7 @@ const createBalloonContent = async (device, nodeId) => {
   try {
     const textMessages = await meshtasticApi.getTextMessages(nodeId);
     if (textMessages && textMessages.data && textMessages.data.length > 0) {
+      hasAnyData = true;
       // Берем последнее сообщение (самое свежее)
       const latestMessage = textMessages.data[0];
       const rawData = latestMessage.rawData;
@@ -740,6 +779,7 @@ const createBalloonContent = async (device, nodeId) => {
   try {
     const mapReportInfo = await meshtasticApi.getMapReportInfo(nodeId);
     if (mapReportInfo && mapReportInfo.data && mapReportInfo.data.length > 0) {
+      hasAnyData = true;
       // Берем последний отчет (самый свежий)
       const latestReport = mapReportInfo.data[0];
       const rawData = latestReport.rawData;
@@ -856,6 +896,7 @@ const createBalloonContent = async (device, nodeId) => {
       tracerouteInfo.data &&
       tracerouteInfo.data.length > 0
     ) {
+      hasAnyData = true;
       // Берем последнюю запись (самую свежую)
       const latestTrace = tracerouteInfo.data[0];
       const rawData = latestTrace.rawData;
@@ -1110,6 +1151,39 @@ const createBalloonContent = async (device, nodeId) => {
     // Ошибка загрузки данных traceroute - продолжаем работу
   }
 
+  // Add chart icon button if we have any data
+  let chartButtonHtml = "";
+  if (hasAnyData) {
+    const deviceName = device.longName || device.shortName || nodeId;
+    chartButtonHtml = `
+    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; text-align: center;">
+      <button 
+        onclick="window.openChartModal('${nodeId}', '${deviceName}'); return false;" 
+        style="
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+          box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        "
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';"
+        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.3)';"
+      >
+        <span style="width: 16px; height: 16px;">${ICONS.CHART}</span>
+        <span>Графики данных</span>
+      </button>
+    </div>
+    `;
+  }
+
   return `
     <div style="max-width: 350px; font-size: 12px;">
 
@@ -1119,6 +1193,7 @@ const createBalloonContent = async (device, nodeId) => {
     ${textMessagesHtml}
     ${mapReportHtml}
     ${tracerouteHtml}
+    ${chartButtonHtml}
     </div>
   `;
 };
@@ -1425,7 +1500,6 @@ const renderBallons = (
 const fetchDevicesData = async () => {
   try {
     const response = await fetch("https://meshtasticback.taubetele.com/dots");
-
     if (!response.ok) {
       if (response.status === 502) {
         throw new Error(
@@ -1581,6 +1655,9 @@ onMounted(async () => {
     }
     if (window.focusOnDeviceByHex) {
       delete window.focusOnDeviceByHex;
+    }
+    if (window.openChartModal) {
+      delete window.openChartModal;
     }
   });
 
