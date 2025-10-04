@@ -29,27 +29,50 @@
             v-for="result in searchResults"
             :key="getDeviceKey(result.device)"
             class="device-item"
-            @click="selectDevice(result.device, result.deviceKey)"
           >
-            <div class="device-header">
-              <span class="device-name">{{
-                getDeviceName(result.device)
-              }}</span>
-              <span class="device-short">{{
-                getDeviceShortName(result.device)
-              }}</span>
-            </div>
-            <div class="device-details">
-              <span class="device-time">{{
-                formatTime(result.device.s_time)
-              }}</span>
-            </div>
-            <!-- Debug section removed -->
+            <div
+              @click="selectDevice(result.device, result.deviceKey)"
+              style="flex: 1; cursor: pointer"
+            >
+              <div class="device-header">
+                <span class="device-name">{{
+                  getDeviceName(result.device)
+                }}</span>
+                <span class="device-short">{{
+                  getDeviceShortName(result.device)
+                }}</span>
+              </div>
+              <div class="device-details">
+                <span class="device-time">{{
+                  formatTime(result.device.s_time)
+                }}</span>
+              </div>
+              <!-- Debug section removed -->
 
-            <div class="device-location" v-if="hasValidLocation(result.device)">
-              📍 {{ formatCoordinate(result.device.latitude) }},
-              {{ formatCoordinate(result.device.longitude) }}
+              <div
+                class="device-location"
+                v-if="hasValidLocation(result.device)"
+              >
+                📍 {{ formatCoordinate(result.device.latitude) }},
+                {{ formatCoordinate(result.device.longitude) }}
+              </div>
             </div>
+            <button
+              @click.stop="openCharts(result.device, result.deviceKey)"
+              class="chart-button"
+              title="Показать графики"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                height="16"
+                viewBox="0 0 448 512"
+              >
+                <path
+                  d="M160 80c0-26.5 21.5-48 48-48h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V80zM0 272c0-26.5 21.5-48 48-48H80c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V272zM368 96h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H368c-26.5 0-48-21.5-48-48V144c0-26.5 21.5-48 48-48z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -77,7 +100,7 @@
 <script setup>
 import { ref, computed } from "vue";
 
-const emit = defineEmits(["close", "selectDevice"]);
+const emit = defineEmits(["close", "selectDevice", "openCharts"]);
 
 const searchQuery = ref("");
 const searchResults = ref([]);
@@ -248,6 +271,27 @@ const selectDevice = (device, deviceKey) => {
     // Если нет координат, все равно передаем устройство для возможного отображения информации
 
     emit("selectDevice", { device: device, deviceKey: deviceKey });
+  }
+  emit("close");
+};
+
+const openCharts = (device, deviceKey) => {
+  // Получаем nodeId - сначала пробуем hex_id, затем остальные
+  // hex_id обычно используется в баллунах и API
+  const nodeId = device.hex_id || device.device_id || device.id || deviceKey;
+
+  const deviceName =
+    device.longName ||
+    device.long_name ||
+    device.shortName ||
+    device.short_name ||
+    nodeId;
+
+  console.log("SearchModal openCharts:", { nodeId, device, deviceKey });
+
+  // Вызываем глобальную функцию напрямую
+  if (window.openChartModal) {
+    window.openChartModal(nodeId, deviceName);
   }
   emit("close");
 };
@@ -493,12 +537,41 @@ const formatTime = (timestamp) => {
   padding: 16px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   transition: all 0.2s;
 
   &:hover {
     border-color: #3b82f6;
     background: #f8fafc;
+  }
+}
+
+.chart-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+  flex-shrink: 0;
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.5);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
   }
 }
 

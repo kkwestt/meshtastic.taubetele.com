@@ -172,6 +172,15 @@ const handleDeviceSelect = (data) => {
   // Закрываем модальное окно поиска
   shouldShowSearchModal.value = false;
 };
+
+const handleOpenCharts = (data) => {
+  // Вызываем глобальную функцию для открытия графиков
+  if (window.openChartModal) {
+    window.openChartModal(data.nodeId, data.deviceName);
+  }
+  // Закрываем модальное окно поиска
+  shouldShowSearchModal.value = false;
+};
 </script>
 
 <style lang="scss">

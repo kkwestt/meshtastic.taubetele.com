@@ -223,6 +223,7 @@ const getGatewayLongName = async (hexId) => {
 
 // Function to open chart modal
 const openChartModal = (nodeId, deviceName) => {
+  console.log("DotsMap openChartModal:", { nodeId, deviceName });
   // Close any open balloon first
   if (map) {
     map.balloon.close();
@@ -1151,49 +1152,47 @@ const createBalloonContent = async (device, nodeId) => {
     // Ошибка загрузки данных traceroute - продолжаем работу
   }
 
-  // Add chart icon button if we have any data
-  let chartButtonHtml = "";
-  if (hasAnyData) {
-    const deviceName = device.longName || device.shortName || nodeId;
-    chartButtonHtml = `
-    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; text-align: center;">
-      <button 
-        onclick="window.openChartModal('${nodeId}', '${deviceName}'); return false;" 
-        style="
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 600;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.2s;
-          box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-        "
-        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)';"
-        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.3)';"
-      >
-        <span style="width: 16px; height: 16px;">${ICONS.CHART}</span>
-        <span>Графики данных</span>
-      </button>
-    </div>
-    `;
-  }
-
   return `
     <div style="max-width: 350px; font-size: 12px;">
-
+    ${
+      hasAnyData
+        ? `<div style="margin-bottom: 8px;">
+        <button 
+          onclick="window.openChartModal('${nodeId}', '${
+            device.longName || device.shortName || nodeId
+          }'); return false;" 
+          style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+          "
+          onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 10px rgba(102, 126, 234, 0.5)';"
+          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 6px rgba(102, 126, 234, 0.3)';"
+        >
+          <span style="width: 14px; height: 14px; display: inline-flex;">${
+            ICONS.CHART
+          }</span>
+          <span>Графики данных</span>
+        </button>
+      </div>`
+        : ""
+    }
     ${nodeInfoHtml}
     ${positionInfoHtml}
     ${telemetryInfoHtml}
     ${textMessagesHtml}
     ${mapReportHtml}
     ${tracerouteHtml}
-    ${chartButtonHtml}
     </div>
   `;
 };
