@@ -57,22 +57,42 @@
                 {{ formatCoordinate(result.device.longitude) }}
               </div>
             </div>
-            <button
-              @click.stop="openCharts(result.device, result.deviceKey)"
-              class="chart-button"
-              title="Показать графики"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                height="16"
-                viewBox="0 0 448 512"
+            <div style="display: flex; gap: 8px">
+              <button
+                @click.stop="openCharts(result.device, result.deviceKey)"
+                class="chart-button"
+                title="Показать графики"
               >
-                <path
-                  d="M160 80c0-26.5 21.5-48 48-48h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V80zM0 272c0-26.5 21.5-48 48-48H80c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V272zM368 96h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H368c-26.5 0-48-21.5-48-48V144c0-26.5 21.5-48 48-48z"
-                  fill="currentColor"
-                />
-              </svg>
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  height="16"
+                  viewBox="0 0 448 512"
+                >
+                  <path
+                    d="M160 80c0-26.5 21.5-48 48-48h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V80zM0 272c0-26.5 21.5-48 48-48H80c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V272zM368 96h32c26.5 0 48 21.5 48 48V432c0 26.5-21.5 48-48 48H368c-26.5 0-48-21.5-48-48V144c0-26.5 21.5-48 48-48z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+              <button
+                @click.stop="
+                  openLocationHistory(result.device, result.deviceKey)
+                "
+                class="history-button"
+                title="История местоположений"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  height="16"
+                  viewBox="0 0 512 512"
+                >
+                  <path
+                    d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -292,6 +312,30 @@ const openCharts = (device, deviceKey) => {
   // Вызываем глобальную функцию напрямую
   if (window.openChartModal) {
     window.openChartModal(nodeId, deviceName);
+  }
+  emit("close");
+};
+
+const openLocationHistory = (device, deviceKey) => {
+  // Получаем nodeId - сначала пробуем hex_id, затем остальные
+  const nodeId = device.hex_id || device.device_id || device.id || deviceKey;
+
+  const deviceName =
+    device.longName ||
+    device.long_name ||
+    device.shortName ||
+    device.short_name ||
+    nodeId;
+
+  console.log("SearchModal openLocationHistory:", {
+    nodeId,
+    device,
+    deviceKey,
+  });
+
+  // Вызываем глобальную функцию напрямую
+  if (window.showLocationHistory) {
+    window.showLocationHistory(nodeId, deviceName);
   }
   emit("close");
 };
@@ -567,6 +611,33 @@ const formatTime = (timestamp) => {
   &:hover {
     transform: scale(1.1);
     box-shadow: 0 4px 10px rgba(102, 126, 234, 0.5);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.history-button {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(255, 107, 53, 0.3);
+  flex-shrink: 0;
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 10px rgba(255, 107, 53, 0.5);
   }
 
   svg {

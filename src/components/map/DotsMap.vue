@@ -28,6 +28,24 @@
       }}</span>
     </div>
 
+    <!-- Кнопка закрытия истории местоположений -->
+    <div
+      class="close-history-button"
+      v-if="isLocationHistoryActive"
+      @click="closeLocationHistory"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 384 512">
+        <path
+          d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"
+          fill="currentColor"
+        />
+      </svg>
+      <span v-if="locationHistories.length > 1"
+        >Закрыть все истории ({{ locationHistories.length }})</span
+      >
+      <span v-else>Закрыть историю</span>
+    </div>
+
     <!-- Chart Modal -->
     <ChartModal
       v-if="showChartModal"
@@ -84,6 +102,9 @@ const isDataLoaded = ref(false); // Флаг загрузки данных
 const showChartModal = ref(false);
 const selectedNodeId = ref(null);
 const selectedDeviceName = ref("");
+const isLocationHistoryActive = ref(false);
+const locationHistories = ref([]); // Array to store multiple location histories
+let historyColorIndex = 0; // Index for rotating through colors
 
 const clearGeolocationStatus = () => {
   setTimeout(() => {
@@ -242,6 +263,279 @@ const closeChartModal = () => {
 
 // Make function available globally for onclick handlers
 window.openChartModal = openChartModal;
+
+// Function to show location history
+const showLocationHistory = async (nodeId, deviceName) => {
+  console.log("showLocationHistory:", { nodeId, deviceName });
+
+  // Close any open balloon first
+  if (map) {
+    map.balloon.close();
+  }
+
+  try {
+    // Check if history for this device is already displayed
+    const existingHistoryIndex = locationHistories.value.findIndex(
+      (h) => h.nodeId === nodeId
+    );
+    if (existingHistoryIndex !== -1) {
+      geolocationStatus.value = {
+        type: "warning",
+        message: "📍 История этого устройства уже отображается",
+      };
+      setTimeout(() => {
+        if (geolocationStatus.value?.type === "warning") {
+          geolocationStatus.value = null;
+        }
+      }, 3000);
+      return;
+    }
+
+    // Fetch position data
+    const positionData = await meshtasticApi.getPositionInfo(nodeId);
+
+    if (!positionData || !positionData.data || positionData.data.length === 0) {
+      geolocationStatus.value = {
+        type: "warning",
+        message: "📍 Нет данных о местоположениях для этого устройства",
+      };
+      setTimeout(() => {
+        if (geolocationStatus.value?.type === "warning") {
+          geolocationStatus.value = null;
+        }
+      }, 5000);
+      return;
+    }
+
+    // Clear all device markers only on first history
+    if (locationHistories.value.length === 0) {
+      clearDeviceMarkers();
+    }
+
+    // Filter positions with valid coordinates
+    const positions = positionData.data
+      .filter(
+        (pos) =>
+          pos.rawData &&
+          pos.rawData.latitude_i !== undefined &&
+          pos.rawData.longitude_i !== undefined
+      )
+      .slice(0, 200); // Limit to 200 positions as requested
+
+    if (positions.length === 0) {
+      geolocationStatus.value = {
+        type: "warning",
+        message: "📍 Нет валидных координат для этого устройства",
+      };
+      setTimeout(() => {
+        if (geolocationStatus.value?.type === "warning") {
+          geolocationStatus.value = null;
+        }
+      }, 5000);
+      return;
+    }
+
+    // Get color for this history
+    const colorConfig =
+      MAP_PRESETS.HISTORY_COLORS[
+        historyColorIndex % MAP_PRESETS.HISTORY_COLORS.length
+      ];
+    historyColorIndex++;
+
+    // Create array of coordinates for polyline
+    const coordinates = positions.map((pos) => [
+      pos.rawData.latitude_i / 1e7,
+      pos.rawData.longitude_i / 1e7,
+    ]);
+
+    // Draw polyline connecting all positions
+    const polyline = new ymaps.Polyline(
+      coordinates,
+      {},
+      {
+        strokeColor: colorConfig.stroke,
+        strokeWidth: 3,
+        strokeOpacity: 0.7,
+      }
+    );
+    map.geoObjects.add(polyline);
+
+    // Store objects for this history
+    const historyObjects = [polyline];
+
+    // Add markers for each position
+    positions.forEach((pos, index) => {
+      const coords = [
+        pos.rawData.latitude_i / 1e7,
+        pos.rawData.longitude_i / 1e7,
+      ];
+
+      const timestamp = formatTime(pos.timestamp);
+      const isFirst = index === 0;
+      const isLast = index === positions.length - 1;
+
+      let label = "";
+      if (isFirst) {
+        label = "Последнее";
+      } else if (isLast) {
+        label = "Первое";
+      }
+
+      const placemark = new ymaps.Placemark(
+        coords,
+        {
+          balloonContentHeader: `${deviceName} - ${label || "История"}`,
+          balloonContentBody: `
+            <div style="font-size: 12px;">
+              <div style="margin-bottom: 4px;"><strong>Устройство:</strong> ${deviceName}</div>
+              <div style="margin-bottom: 4px;"><strong>Время:</strong> ${timestamp}</div>
+              <div style="margin-bottom: 4px;"><strong>Координаты:</strong> ${coords[0].toFixed(
+                4
+              )}, ${coords[1].toFixed(4)}</div>
+              ${
+                pos.rawData.altitude !== undefined
+                  ? `<div style="margin-bottom: 4px;"><strong>Высота:</strong> ${pos.rawData.altitude} м</div>`
+                  : ""
+              }
+              ${
+                pos.rawData.sats_in_view !== undefined
+                  ? `<div><strong>Спутников:</strong> ${pos.rawData.sats_in_view}</div>`
+                  : ""
+              }
+            </div>
+          `,
+          iconContent: label || (index + 1).toString(),
+        },
+        {
+          preset: colorConfig.preset,
+        }
+      );
+
+      map.geoObjects.add(placemark);
+      historyObjects.push(placemark);
+    });
+
+    // Store this history
+    locationHistories.value.push({
+      nodeId,
+      deviceName,
+      color: colorConfig.stroke,
+      objects: historyObjects,
+      pointsCount: positions.length,
+    });
+
+    // Fit map bounds to show all positions
+    if (coordinates.length > 0) {
+      const bounds = ymaps.util.bounds.fromPoints(coordinates);
+      map.setBounds(bounds, {
+        checkZoomRange: true,
+        zoomMargin: 50,
+      });
+    }
+
+    // Activate location history mode
+    isLocationHistoryActive.value = true;
+
+    // Show success message
+    geolocationStatus.value = {
+      type: "success",
+      message: `📍 История ${deviceName}: ${positions.length} точек (всего историй: ${locationHistories.value.length})`,
+    };
+    setTimeout(() => {
+      if (geolocationStatus.value?.type === "success") {
+        geolocationStatus.value = null;
+      }
+    }, 5000);
+
+    // Update points counter
+    const totalPoints = locationHistories.value.reduce(
+      (sum, h) => sum + h.pointsCount,
+      0
+    );
+    pointsOnMap.value = totalPoints;
+  } catch (error) {
+    console.error("Ошибка отображения истории местоположений:", error);
+    geolocationStatus.value = {
+      type: "error",
+      message: "❌ Ошибка загрузки истории местоположений",
+    };
+    setTimeout(() => {
+      if (geolocationStatus.value?.type === "error") {
+        geolocationStatus.value = null;
+      }
+    }, 5000);
+  }
+};
+
+// Function to close location history and restore normal view
+const closeLocationHistory = async () => {
+  // Remove all history objects from map
+  if (map) {
+    locationHistories.value.forEach((history) => {
+      history.objects.forEach((obj) => {
+        map.geoObjects.remove(obj);
+      });
+    });
+  }
+
+  // Clear histories array
+  const historiesCount = locationHistories.value.length;
+  locationHistories.value = [];
+  historyColorIndex = 0; // Reset color index
+
+  // Deactivate location history mode
+  isLocationHistoryActive.value = false;
+
+  // Restore geolocation marker
+  const renderSelfBallon = (shouldSetCenter = false) => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        try {
+          const coords = [position.coords.latitude, position.coords.longitude];
+          const geolocationPlacemark = new ymaps.Placemark(
+            coords,
+            {
+              balloonContentBody: "Вы здесь!",
+            },
+            {
+              preset: MAP_PRESETS.GEOLOCATION,
+            }
+          );
+          map.geoObjects.add(geolocationPlacemark);
+        } catch (error) {
+          console.error("Ошибка восстановления геолокации:", error);
+        }
+      },
+      () => {},
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 10000,
+      }
+    );
+  };
+
+  renderSelfBallon(false);
+
+  // Restore device markers
+  await updateDevicesData();
+
+  // Show status message
+  geolocationStatus.value = {
+    type: "success",
+    message: `✓ Закрыто историй: ${historiesCount}`,
+  };
+  setTimeout(() => {
+    if (geolocationStatus.value?.type === "success") {
+      geolocationStatus.value = null;
+    }
+  }, 3000);
+};
+
+// Make function available globally for onclick handlers
+window.showLocationHistory = showLocationHistory;
 
 const createBalloonContent = async (device, nodeId) => {
   let nodeInfoHtml = "";
@@ -1156,7 +1450,7 @@ const createBalloonContent = async (device, nodeId) => {
     <div style="max-width: 350px; font-size: 12px;">
     ${
       hasAnyData
-        ? `<div style="margin-bottom: 8px;">
+        ? `<div style="margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
         <button 
           onclick="window.openChartModal('${nodeId}', '${
             device.longName || device.shortName || nodeId
@@ -1183,6 +1477,33 @@ const createBalloonContent = async (device, nodeId) => {
             ICONS.CHART
           }</span>
           <span>Графики данных</span>
+        </button>
+        <button 
+          onclick="window.showLocationHistory('${nodeId}', '${
+            device.longName || device.shortName || nodeId
+          }'); return false;" 
+          style="
+            background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 6px rgba(255, 107, 53, 0.3);
+          "
+          onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 10px rgba(255, 107, 53, 0.5)';"
+          onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 6px rgba(255, 107, 53, 0.3)';"
+        >
+          <span style="width: 14px; height: 14px; display: inline-flex;">${
+            ICONS.HISTORY
+          }</span>
+          <span>История местоположений</span>
         </button>
       </div>`
         : ""
@@ -1657,6 +1978,9 @@ onMounted(async () => {
     }
     if (window.openChartModal) {
       delete window.openChartModal;
+    }
+    if (window.showLocationHistory) {
+      delete window.showLocationHistory;
     }
   });
 
@@ -2249,5 +2573,44 @@ onMounted(async () => {
 
 .geolocation-status .error {
   color: #d32f2f;
+}
+
+.close-history-button {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+  border: none;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  user-select: none;
+
+  &:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.5);
+    background: linear-gradient(135deg, #f7931e 0%, #ff6b35 100%);
+  }
+
+  &:active {
+    transform: translateX(-50%) translateY(0px);
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 </style>
