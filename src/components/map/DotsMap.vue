@@ -2335,9 +2335,9 @@ onMounted(async () => {
     );
   };
 
-  // Функция для получения сохраненной позиции карты из URL или localStorage
+  // Функция для получения сохраненной позиции карты из URL
   const getSavedMapPosition = () => {
-    // Сначала проверяем URL параметры
+    // Проверяем только URL параметры
     const urlParams = new URLSearchParams(window.location.search);
     const urlLat = urlParams.get("lat");
     const urlLng = urlParams.get("lng");
@@ -2350,20 +2350,8 @@ onMounted(async () => {
       };
     }
 
-    // Если в URL нет параметров, проверяем localStorage
-    try {
-      const savedPosition = localStorage.getItem("mapPosition");
-      if (savedPosition) {
-        const position = JSON.parse(savedPosition);
-        if (position.center && position.zoom) {
-          return position;
-        }
-      }
-    } catch (error) {
-      console.warn("Ошибка чтения сохраненной позиции карты:", error);
-    }
-
-    // Возвращаем дефолтную позицию
+    // Если в URL нет параметров, возвращаем дефолтную позицию
+    // (геолокация или центр Москвы будут применены в renderSelfBallon)
     return {
       center: MAP_CONFIG.DEFAULT_CENTER,
       zoom: MAP_CONFIG.DEFAULT_ZOOM,
@@ -2503,14 +2491,12 @@ onMounted(async () => {
   const init = async () => {
     initYMap();
 
-    // Проверяем, есть ли сохраненная позиция
+    // Проверяем, есть ли координаты в URL
     const urlParams = new URLSearchParams(window.location.search);
-    const hasSavedPosition =
-      (urlParams.get("lat") && urlParams.get("lng")) ||
-      localStorage.getItem("mapPosition");
+    const hasUrlPosition = urlParams.get("lat") && urlParams.get("lng");
 
-    // Центрируем карту на геолокации только если нет сохраненной позиции
-    renderSelfBallon(!hasSavedPosition);
+    // Центрируем карту на геолокации только если нет координат в URL
+    renderSelfBallon(!hasUrlPosition);
     await fetchDevicesData();
 
     // Добавляем небольшую задержку для инициализации карты
