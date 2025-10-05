@@ -2353,11 +2353,22 @@ onMounted(async () => {
       emit("infoOpen");
     });
 
+    let telegramButton = new ymaps.control.Button("Telegram");
+    map.controls.add(telegramButton, {
+      selectOnClick: false,
+      float: "left",
+      floatIndex: 4,
+      floatIndex: 100,
+    });
+    telegramButton.events.add("click", function () {
+      window.open("https://t.me/meshtasticmoscow", "_blank");
+    });
+
     let searchButton = new ymaps.control.Button("ПОИСК");
     map.controls.add(searchButton, {
       selectOnClick: false,
       float: "left",
-      floatIndex: 2,
+      floatIndex: 3,
     });
     searchButton.events.add("click", function () {
       emit("searchOpen");

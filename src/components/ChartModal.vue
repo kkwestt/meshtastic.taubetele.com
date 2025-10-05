@@ -639,7 +639,7 @@ const fetchAllData = async () => {
         const msgSnr = [];
         const msgRssi = [];
 
-        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000; // 1 week in milliseconds
+        const threeMonthsAgo = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days (3 months) in milliseconds
 
         textMessages.data.forEach((m) => {
           // Check if message is public (to: "^all" or 0xffffffff or 4294967295)
@@ -649,8 +649,8 @@ const fetchAllData = async () => {
             m.to === 4294967295 ||
             m.to === "ffffffff";
 
-          // Check if message is not older than 1 week
-          const isRecent = m.timestamp && m.timestamp >= oneWeekAgo;
+          // Check if message is not older than 90 days
+          const isRecent = m.timestamp && m.timestamp >= threeMonthsAgo;
 
           if (m.rawData?.text && isPublic && isRecent) {
             messages.push({
@@ -663,10 +663,20 @@ const fetchAllData = async () => {
           // Collect SNR/RSSI from message packets (only for public and recent messages)
           if (isPublic && isRecent) {
             if (m.rxSnr !== undefined && m.rxSnr !== 0) {
-              msgSnr.push({ timestamp: m.timestamp, value: m.rxSnr });
+              msgSnr.push({
+                timestamp: m.timestamp,
+                value: m.rxSnr,
+                text: m.rawData?.text || "",
+                gateway: m.gatewayId || m.gateway || "Unknown",
+              });
             }
             if (m.rxRssi !== undefined && m.rxRssi !== 0) {
-              msgRssi.push({ timestamp: m.timestamp, value: m.rxRssi });
+              msgRssi.push({
+                timestamp: m.timestamp,
+                value: m.rxRssi,
+                text: m.rawData?.text || "",
+                gateway: m.gatewayId || m.gateway || "Unknown",
+              });
             }
           }
         });
@@ -716,6 +726,8 @@ const createChart = (canvasRef, label, data, color, unit = "") => {
   if (!canvasRef || !data.length) return;
 
   const ctx = canvasRef.getContext("2d");
+  const isMobile = window.innerWidth <= 768;
+
   const chartInstance = new Chart(ctx, {
     type: "line",
     data: {
@@ -726,15 +738,18 @@ const createChart = (canvasRef, label, data, color, unit = "") => {
           data: data.map((d) => d.value),
           borderColor: color,
           backgroundColor: color + "20",
-          borderWidth: 2,
+          borderWidth: isMobile ? 1.5 : 2,
           tension: 0.4,
           fill: true,
+          pointRadius: isMobile ? 2 : 3,
+          pointHoverRadius: isMobile ? 4 : 5,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: true,
+      aspectRatio: isMobile ? 1.2 : 2,
       plugins: {
         legend: {
           display: false,
@@ -757,16 +772,21 @@ const createChart = (canvasRef, label, data, color, unit = "") => {
         x: {
           display: true,
           ticks: {
-            maxRotation: 45,
-            minRotation: 45,
+            maxRotation: isMobile ? 60 : 45,
+            minRotation: isMobile ? 60 : 45,
+            maxTicksLimit: isMobile ? 5 : 10,
             font: {
-              size: 10,
+              size: isMobile ? 8 : 10,
             },
           },
         },
         y: {
           display: true,
           ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: {
+              size: isMobile ? 9 : 11,
+            },
             callback: (value) => `${value}${unit}`,
           },
         },
@@ -789,6 +809,7 @@ const createDualAxisChart = (
   if (!canvasRef || (!data1.length && !data2.length)) return;
 
   const ctx = canvasRef.getContext("2d");
+  const isMobile = window.innerWidth <= 768;
 
   // Combine timestamps
   const allTimestamps = [
@@ -811,10 +832,12 @@ const createDualAxisChart = (
           }),
           borderColor: color1,
           backgroundColor: color1 + "20",
-          borderWidth: 2,
+          borderWidth: isMobile ? 1.5 : 2,
           tension: 0.4,
           yAxisID: "y",
           spanGaps: true,
+          pointRadius: isMobile ? 2 : 3,
+          pointHoverRadius: isMobile ? 4 : 5,
         },
         {
           label: label2,
@@ -824,29 +847,63 @@ const createDualAxisChart = (
           }),
           borderColor: color2,
           backgroundColor: color2 + "20",
-          borderWidth: 2,
+          borderWidth: isMobile ? 1.5 : 2,
           tension: 0.4,
           yAxisID: "y1",
           spanGaps: true,
+          pointRadius: isMobile ? 2 : 3,
+          pointHoverRadius: isMobile ? 4 : 5,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: true,
+      aspectRatio: isMobile ? 1.2 : 2,
       plugins: {
         legend: {
           display: true,
+          labels: {
+            font: {
+              size: isMobile ? 10 : 12,
+            },
+            boxWidth: isMobile ? 30 : 40,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            afterLabel: (context) => {
+              const dataIndex = context.dataIndex;
+              const ts = allTimestamps[dataIndex];
+              let dataSource = null;
+
+              if (context.datasetIndex === 0 && data1.length) {
+                dataSource = data1.find((d) => d.timestamp === ts);
+              } else if (context.datasetIndex === 1 && data2.length) {
+                dataSource = data2.find((d) => d.timestamp === ts);
+              }
+
+              const labels = [];
+              if (dataSource?.gateway) {
+                labels.push(`Шлюз: ${dataSource.gateway}`);
+              }
+              if (dataSource?.text) {
+                labels.push(`Сообщение: ${dataSource.text}`);
+              }
+              return labels.length > 0 ? labels : "";
+            },
+          },
         },
       },
       scales: {
         x: {
           display: true,
           ticks: {
-            maxRotation: 45,
-            minRotation: 45,
+            maxRotation: isMobile ? 60 : 45,
+            minRotation: isMobile ? 60 : 45,
+            maxTicksLimit: isMobile ? 5 : 10,
             font: {
-              size: 10,
+              size: isMobile ? 8 : 10,
             },
           },
         },
@@ -855,8 +912,17 @@ const createDualAxisChart = (
           display: true,
           position: "left",
           title: {
-            display: true,
+            display: !isMobile,
             text: label1,
+            font: {
+              size: isMobile ? 9 : 12,
+            },
+          },
+          ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: {
+              size: isMobile ? 9 : 11,
+            },
           },
         },
         y1: {
@@ -864,8 +930,17 @@ const createDualAxisChart = (
           display: true,
           position: "right",
           title: {
-            display: true,
+            display: !isMobile,
             text: label2,
+            font: {
+              size: isMobile ? 9 : 12,
+            },
+          },
+          ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: {
+              size: isMobile ? 9 : 11,
+            },
           },
           grid: {
             drawOnChartArea: false,
@@ -893,6 +968,7 @@ const createTripleAxisChart = (
   if (!canvasRef || (!data1.length && !data2.length && !data3.length)) return;
 
   const ctx = canvasRef.getContext("2d");
+  const isMobile = window.innerWidth <= 768;
 
   // Combine timestamps
   const allTimestamps = [
@@ -916,10 +992,12 @@ const createTripleAxisChart = (
           }),
           borderColor: color1,
           backgroundColor: color1 + "20",
-          borderWidth: 2,
+          borderWidth: isMobile ? 1.5 : 2,
           tension: 0.4,
           yAxisID: "y",
           spanGaps: true,
+          pointRadius: isMobile ? 2 : 3,
+          pointHoverRadius: isMobile ? 4 : 5,
         },
         {
           label: label2,
@@ -929,10 +1007,12 @@ const createTripleAxisChart = (
           }),
           borderColor: color2,
           backgroundColor: color2 + "20",
-          borderWidth: 2,
+          borderWidth: isMobile ? 1.5 : 2,
           tension: 0.4,
           yAxisID: "y1",
           spanGaps: true,
+          pointRadius: isMobile ? 2 : 3,
+          pointHoverRadius: isMobile ? 4 : 5,
         },
         {
           label: label3,
@@ -942,16 +1022,19 @@ const createTripleAxisChart = (
           }),
           borderColor: color3,
           backgroundColor: color3 + "20",
-          borderWidth: 2,
+          borderWidth: isMobile ? 1.5 : 2,
           tension: 0.4,
           yAxisID: "y2",
           spanGaps: true,
+          pointRadius: isMobile ? 2 : 3,
+          pointHoverRadius: isMobile ? 4 : 5,
         },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: true,
+      aspectRatio: isMobile ? 1.2 : 2,
       interaction: {
         mode: "index",
         intersect: false,
@@ -959,6 +1042,13 @@ const createTripleAxisChart = (
       plugins: {
         legend: {
           display: true,
+          labels: {
+            font: {
+              size: isMobile ? 9 : 12,
+            },
+            boxWidth: isMobile ? 25 : 40,
+            padding: isMobile ? 8 : 10,
+          },
         },
         tooltip: {
           callbacks: {
@@ -987,10 +1077,11 @@ const createTripleAxisChart = (
         x: {
           display: true,
           ticks: {
-            maxRotation: 45,
-            minRotation: 45,
+            maxRotation: isMobile ? 60 : 45,
+            minRotation: isMobile ? 60 : 45,
+            maxTicksLimit: isMobile ? 4 : 10,
             font: {
-              size: 10,
+              size: isMobile ? 8 : 10,
             },
           },
         },
@@ -999,8 +1090,17 @@ const createTripleAxisChart = (
           display: true,
           position: "left",
           title: {
-            display: true,
+            display: !isMobile,
             text: label1,
+            font: {
+              size: isMobile ? 9 : 12,
+            },
+          },
+          ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: {
+              size: isMobile ? 9 : 11,
+            },
           },
         },
         y1: {
@@ -1008,8 +1108,17 @@ const createTripleAxisChart = (
           display: true,
           position: "right",
           title: {
-            display: true,
+            display: !isMobile,
             text: label2,
+            font: {
+              size: isMobile ? 9 : 12,
+            },
+          },
+          ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: {
+              size: isMobile ? 9 : 11,
+            },
           },
           grid: {
             drawOnChartArea: false,
@@ -1017,11 +1126,20 @@ const createTripleAxisChart = (
         },
         y2: {
           type: "linear",
-          display: true,
+          display: !isMobile,
           position: "right",
           title: {
-            display: true,
+            display: !isMobile,
             text: label3,
+            font: {
+              size: isMobile ? 9 : 12,
+            },
+          },
+          ticks: {
+            maxTicksLimit: isMobile ? 5 : 8,
+            font: {
+              size: isMobile ? 9 : 11,
+            },
           },
           grid: {
             drawOnChartArea: false,
@@ -1687,40 +1805,131 @@ canvas {
 }
 
 @media (max-width: 768px) {
-  .modal-content {
-    max-width: 100%;
-    max-height: 95vh;
-    margin: 10px;
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-start;
   }
 
-  .modal-header,
-  .modal-body {
+  .modal-content {
+    max-width: 100%;
+    width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .modal-header {
     padding: 16px;
+    position: sticky;
+    top: 0;
+  }
+
+  .modal-header h2 {
+    font-size: 1.1rem;
+    line-height: 1.3;
+  }
+
+  .modal-body {
+    padding: 12px;
   }
 
   .charts-container {
-    gap: 24px;
+    gap: 20px;
+  }
+
+  .endpoint-block {
+    border-radius: 8px;
   }
 
   .endpoint-header {
-    padding: 16px;
+    padding: 14px 12px;
   }
 
   .endpoint-header h2 {
-    font-size: 1.2rem;
+    font-size: 1rem;
+    margin: 0 0 4px 0;
+    line-height: 1.2;
   }
 
   .endpoint-description {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+
+  .endpoint-header-content {
+    gap: 12px;
+  }
+
+  .collapse-button {
+    font-size: 1rem;
+    padding: 6px 10px;
   }
 
   .endpoint-charts {
-    padding: 16px;
+    padding: 12px;
     gap: 16px;
   }
 
   .chart-section {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  .chart-section h3 {
+    font-size: 0.95rem;
+    margin: 0 0 12px 0;
+  }
+
+  canvas {
+    max-height: 250px;
+  }
+
+  .message-item {
+    padding: 10px;
+  }
+
+  .message-time {
+    font-size: 0.7rem;
+  }
+
+  .message-text {
+    font-size: 0.85rem;
+  }
+
+  .modal-close {
+    font-size: 1.75rem;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-header h2 {
+    font-size: 1rem;
+  }
+
+  .endpoint-header h2 {
+    font-size: 0.9rem;
+  }
+
+  .endpoint-description {
+    font-size: 0.75rem;
+  }
+
+  .chart-section h3 {
+    font-size: 0.9rem;
+  }
+
+  .modal-body {
+    padding: 10px;
+  }
+
+  .endpoint-charts {
+    padding: 10px;
+  }
+
+  .chart-section {
+    padding: 10px;
   }
 }
 </style>
