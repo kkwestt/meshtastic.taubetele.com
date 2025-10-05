@@ -2353,6 +2353,16 @@ onMounted(async () => {
       emit("infoOpen");
     });
 
+    let devicesButton = new ymaps.control.Button("УСТРОЙСТВА");
+    map.controls.add(devicesButton, {
+      selectOnClick: false,
+      float: "left",
+      floatIndex: 2,
+    });
+    devicesButton.events.add("click", function () {
+      emit("devicesModalOpen");
+    });
+
     let telegramButton = new ymaps.control.Button("Telegram");
     map.controls.add(telegramButton, {
       selectOnClick: false,

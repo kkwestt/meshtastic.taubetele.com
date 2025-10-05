@@ -47,7 +47,7 @@ const handleOverlayClick = () => {
 .modal-content {
   background: white;
   border-radius: 12px;
-  max-width: 600px;
+  max-width: 900px;
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
