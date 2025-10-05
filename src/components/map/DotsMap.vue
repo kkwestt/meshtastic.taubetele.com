@@ -2335,10 +2335,74 @@ onMounted(async () => {
     );
   };
 
-  const initYMap = () => {
-    map = new ymaps.Map("map", {
+  // Функция для получения сохраненной позиции карты из URL или localStorage
+  const getSavedMapPosition = () => {
+    // Сначала проверяем URL параметры
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLat = urlParams.get("lat");
+    const urlLng = urlParams.get("lng");
+    const urlZoom = urlParams.get("zoom");
+
+    if (urlLat && urlLng && urlZoom) {
+      return {
+        center: [parseFloat(urlLat), parseFloat(urlLng)],
+        zoom: parseInt(urlZoom),
+      };
+    }
+
+    // Если в URL нет параметров, проверяем localStorage
+    try {
+      const savedPosition = localStorage.getItem("mapPosition");
+      if (savedPosition) {
+        const position = JSON.parse(savedPosition);
+        if (position.center && position.zoom) {
+          return position;
+        }
+      }
+    } catch (error) {
+      console.warn("Ошибка чтения сохраненной позиции карты:", error);
+    }
+
+    // Возвращаем дефолтную позицию
+    return {
       center: MAP_CONFIG.DEFAULT_CENTER,
       zoom: MAP_CONFIG.DEFAULT_ZOOM,
+    };
+  };
+
+  // Функция для сохранения позиции карты в localStorage и URL
+  const saveMapPosition = debounce(() => {
+    if (!map) return;
+
+    try {
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+
+      // Сохраняем в localStorage
+      const position = {
+        center: center,
+        zoom: zoom,
+      };
+      localStorage.setItem("mapPosition", JSON.stringify(position));
+
+      // Обновляем URL без перезагрузки страницы
+      const url = new URL(window.location.href);
+      url.searchParams.set("lat", center[0].toFixed(6));
+      url.searchParams.set("lng", center[1].toFixed(6));
+      url.searchParams.set("zoom", zoom);
+      window.history.replaceState({}, "", url);
+    } catch (error) {
+      console.warn("Ошибка сохранения позиции карты:", error);
+    }
+  }, 1000);
+
+  const initYMap = () => {
+    // Получаем сохраненную позицию
+    const savedPosition = getSavedMapPosition();
+
+    map = new ymaps.Map("map", {
+      center: savedPosition.center,
+      zoom: savedPosition.zoom,
     });
     map.controls.remove("fullscreenControl");
     map.controls.remove("searchControl");
@@ -2353,7 +2417,7 @@ onMounted(async () => {
       emit("infoOpen");
     });
 
-    let devicesButton = new ymaps.control.Button("УСТРОЙСТВА");
+    let devicesButton = new ymaps.control.Button("Устройства");
     map.controls.add(devicesButton, {
       selectOnClick: false,
       float: "left",
@@ -2367,8 +2431,7 @@ onMounted(async () => {
     map.controls.add(telegramButton, {
       selectOnClick: false,
       float: "left",
-      floatIndex: 4,
-      floatIndex: 100,
+      floatIndex: 3,
     });
     telegramButton.events.add("click", function () {
       window.open("https://t.me/meshtasticmoscow", "_blank");
@@ -2378,7 +2441,7 @@ onMounted(async () => {
     map.controls.add(searchButton, {
       selectOnClick: false,
       float: "left",
-      floatIndex: 3,
+      floatIndex: 4,
     });
     searchButton.events.add("click", function () {
       emit("searchOpen");
@@ -2397,6 +2460,9 @@ onMounted(async () => {
         updatePointsCount();
       }, 100);
     });
+
+    // Сохраняем позицию карты при перемещении или изменении зума
+    map.events.add("actionend", saveMapPosition);
 
     // Функция для обновления только счетчика точек без перерисовки маркеров
     const updatePointsCount = () => {
@@ -2436,7 +2502,15 @@ onMounted(async () => {
 
   const init = async () => {
     initYMap();
-    renderSelfBallon(true);
+
+    // Проверяем, есть ли сохраненная позиция
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasSavedPosition =
+      (urlParams.get("lat") && urlParams.get("lng")) ||
+      localStorage.getItem("mapPosition");
+
+    // Центрируем карту на геолокации только если нет сохраненной позиции
+    renderSelfBallon(!hasSavedPosition);
     await fetchDevicesData();
 
     // Добавляем небольшую задержку для инициализации карты
