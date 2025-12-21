@@ -12,6 +12,7 @@ export const MAP_PRESETS = {
   MQTT: "islands#darkGreenStretchyIcon",
   OFFLINE: "islands#greyStretchyIcon",
   INACTIVE: "islands#greyStretchyIcon",
+  MESHCORE: "islands#orangeStretchyIcon",
   CLUSTER: "islands#blueClusterIcons",
   GEOLOCATION: "islands#redCircleIcon",
   HISTORY: "islands#orangeDotIcon",

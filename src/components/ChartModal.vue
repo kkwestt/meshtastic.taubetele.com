@@ -681,7 +681,7 @@ const fetchAllData = async () => {
           }
         });
 
-        messagesData.value = messages.reverse();
+        messagesData.value = messages.sort((a, b) => b.timestamp - a.timestamp);
         messagesSignalData.value = {
           snr: msgSnr.reverse(),
           rssi: msgRssi.reverse(),

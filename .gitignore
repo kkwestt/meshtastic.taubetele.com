@@ -16,3 +16,4 @@ meshtastic.taubetele.com
 
 # Build output
 dist/
+auto-deploy.sh

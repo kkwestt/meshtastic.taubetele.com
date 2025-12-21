@@ -95,6 +95,7 @@ const handleMapClick = (event) => {
 };
 
 const devices = ref({});
+const meshcoreDevices = ref({});
 const pointsOnMap = ref(0);
 const filteredDevicesCache = ref(new Map());
 const geolocationStatus = ref(null);
@@ -545,6 +546,78 @@ const createBalloonContent = async (device, nodeId) => {
   let mapReportHtml = "";
   let tracerouteHtml = "";
   let hasAnyData = false;
+
+  // Специальная обработка для meshcore устройств
+  if (device.isMeshcore) {
+    hasAnyData = true;
+    
+    // Данные о геолокации с ссылкой
+    if (device.latitude && device.longitude) {
+      const lat = device.latitude;
+      const lon = device.longitude;
+      const googleMapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+      const yandexMapsLink = `https://yandex.ru/maps/?pt=${lon},${lat}&z=15`;
+      
+      positionInfoHtml = `
+    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
+    <div style="font-weight: bold; margin-bottom: 2px;">Данные о позиции: ${formatTime(device.s_time)}</div>
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
+    <span>Координаты:</span><span>
+      <a href="${googleMapsLink}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${lat.toFixed(4)}, ${lon.toFixed(4)}</a>
+      <span style="margin-left: 4px; color: #999; font-size: 10px;">
+        (<a href="${yandexMapsLink}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none;">Яндекс</a>)
+      </span>
+    </span>
+    </div>
+    </div>
+    `;
+    }
+
+    // Информация о шлюзе с ссылкой для фокусировки
+    if (device.gateway_origin_id) {
+      // Добавляем префикс "!" если его нет для корректной обработки hex ID
+      const gatewayHexId = device.gateway_origin_id.startsWith("!") 
+        ? device.gateway_origin_id 
+        : `!${device.gateway_origin_id}`;
+      const gatewayLongName = await getGatewayLongName(gatewayHexId);
+      const gatewayDisplayName = gatewayLongName || device.gateway_origin || device.gateway_origin_id;
+      
+      nodeInfoHtml = `
+    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
+    <div style="font-weight: bold; margin-bottom: 2px;">Информация об устройстве сети MESHCORE</div>
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
+    ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
+    ${device.device_id ? `<span>ID:</span><span>${device.device_id}</span>` : ""}
+    </div>
+    ${device.gateway_origin_id ? `
+    <div style="font-size: 10px; color: #666; margin-top: 4px; line-height: 1.2;">
+      Gateway: <a href="#" onclick="focusOnDeviceByHex('${gatewayHexId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayDisplayName}</a>${device.gateway_origin ? `Источник: ${device.gateway_origin}` : ""}
+    </div>
+    ` : ""}
+    </div>
+    `;
+    } else if (device.name || device.device_id) {
+      // Если нет шлюза, но есть другие данные
+      nodeInfoHtml = `
+    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
+    <div style="font-weight: bold; margin-bottom: 2px;">Информация об устройстве сети MESHCORE</div>
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
+    ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
+    ${device.device_id ? `<span>ID:</span><span>${device.device_id}</span>` : ""}
+    ${device.gateway_origin ? `<span>Источник:</span><span>${device.gateway_origin}</span>` : ""}
+    </div>
+    </div>
+    `;
+    }
+
+    // Возвращаем содержимое для meshcore устройств
+    return `
+    <div style="max-width: 350px; font-size: 12px;">
+    ${nodeInfoHtml}
+    ${positionInfoHtml}
+    </div>
+    `;
+  }
 
   try {
     const nodeInfo = await meshtasticApi.getNodeInfo(nodeId);
@@ -1657,7 +1730,13 @@ const renderBallons = (
       let presetcolor;
       let iconOptions = {};
 
-      if (timeDiffHours < 6 && (device.mqtt === "1" || device.mqtt === 1)) {
+      // Meshcore устройства всегда отображаются красным цветом
+      if (device.isMeshcore) {
+        presetcolor = MAP_PRESETS.MESHCORE;
+        iconOptions = {
+          preset: `${presetcolor}`,
+        };
+      } else if (timeDiffHours < 6 && (device.mqtt === "1" || device.mqtt === 1)) {
         // Если точка онлайн И подключена через MQTT - зеленая
         presetcolor = MAP_PRESETS.MQTT;
         iconOptions = {
@@ -1817,6 +1896,48 @@ const renderBallons = (
   }
 };
 
+const fetchMeshcoreData = async () => {
+  try {
+    const response = await fetch("https://meshtasticback.taubetele.com/dots_meshcore");
+    if (!response.ok) {
+      // Не показываем ошибку пользователю для meshcore, просто логируем
+      console.warn("⚠️ Ошибка загрузки данных meshcore:", response.status);
+      return;
+    }
+
+    const data = await response.json();
+
+    if (data && data.data) {
+      // Преобразуем данные meshcore в формат, совместимый с обычными устройствами
+      const normalizedMeshcore = {};
+      for (const deviceId in data.data) {
+        const device = data.data[deviceId];
+        normalizedMeshcore[deviceId] = {
+          device_id: device.device_id,
+          hex_id: device.device_id,
+          latitude: device.lat,
+          longitude: device.lon,
+          longName: device.name || device.device_id,
+          shortName: device.name || device.device_id,
+          name: device.name, // Сохраняем оригинальное имя
+          s_time: device.s_time,
+          mqtt: "0", // meshcore устройства не являются MQTT
+          isMeshcore: true, // Флаг для идентификации meshcore устройств
+          gateway_origin: device.gateway_origin, // Источник данных (например, "t3s3 wifi mqtt")
+          gateway_origin_id: device.gateway_origin_id, // ID шлюза для ссылки
+        };
+      }
+      meshcoreDevices.value = normalizedMeshcore;
+    } else {
+      meshcoreDevices.value = {};
+    }
+  } catch (error) {
+    // Не показываем ошибку пользователю для meshcore, просто логируем
+    console.warn("⚠️ Ошибка загрузки данных meshcore:", error);
+    meshcoreDevices.value = {};
+  }
+};
+
 const fetchDevicesData = async () => {
   try {
     const response = await fetch("https://meshtasticback.taubetele.com/dots");
@@ -1843,12 +1964,23 @@ const fetchDevicesData = async () => {
       const count = Object.keys(data.data).length;
       emit("devicesCount", count, data.data);
 
+      // Загружаем meshcore данные параллельно
+      await fetchMeshcoreData();
+
+      // Объединяем данные для отображения
+      const allDevices = { ...devices.value, ...meshcoreDevices.value };
       if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(devices.value, false, null, null);
+        debouncedRenderBallons(allDevices, false, null, null);
       }
     } else {
       devices.value = {};
       emit("devicesCount", 0, {});
+
+      // Загружаем meshcore данные даже если обычные данные пусты
+      await fetchMeshcoreData();
+      if (typeof debouncedRenderBallons === "function") {
+        debouncedRenderBallons(meshcoreDevices.value, false, null, null);
+      }
     }
   } catch (error) {
     console.error("❌ Ошибка загрузки данных устройств:", error);
@@ -1869,6 +2001,12 @@ const fetchDevicesData = async () => {
 
     devices.value = {};
     emit("devicesCount", 0, {});
+
+    // Пытаемся загрузить meshcore данные даже при ошибке обычных данных
+    await fetchMeshcoreData();
+    if (typeof debouncedRenderBallons === "function") {
+      debouncedRenderBallons(meshcoreDevices.value, false, null, null);
+    }
 
     // Автоматически скрываем ошибку через 10 секунд
     setTimeout(() => {
@@ -1941,13 +2079,23 @@ const updateDevicesData = async () => {
       devices.value = data.data;
       const count = Object.keys(data.data).length;
       emit("devicesCount", count, data.data);
+    }
 
-      if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(devices.value, true, null, null);
-      }
+    // Обновляем meshcore данные параллельно
+    await fetchMeshcoreData();
+
+    // Объединяем данные для отображения
+    const allDevices = { ...devices.value, ...meshcoreDevices.value };
+    if (typeof debouncedRenderBallons === "function") {
+      debouncedRenderBallons(allDevices, true, null, null);
     }
   } catch (error) {
     console.error("❌ Ошибка обновления данных устройств:", error);
+    // Пытаемся обновить meshcore данные даже при ошибке обычных данных
+    await fetchMeshcoreData();
+    if (typeof debouncedRenderBallons === "function") {
+      debouncedRenderBallons(meshcoreDevices.value, true, null, null);
+    }
   }
 };
 
@@ -2208,10 +2356,11 @@ onMounted(async () => {
       // Конвертируем hex ID в numeric
       const numericId = parseInt(hexId.replace("!", ""), 16);
 
-      // Ищем устройство в данных
+      // Ищем устройство в данных (сначала в обычных, потом в meshcore)
       let targetDevice = null;
       let targetDeviceKey = null;
 
+      // Ищем в обычных устройствах
       for (const deviceKey in devices.value) {
         const device = devices.value[deviceKey];
         if (
@@ -2223,6 +2372,24 @@ onMounted(async () => {
           targetDevice = device;
           targetDeviceKey = deviceKey;
           break;
+        }
+      }
+
+      // Если не нашли в обычных, ищем в meshcore устройствах
+      if (!targetDevice) {
+        for (const deviceKey in meshcoreDevices.value) {
+          const device = meshcoreDevices.value[deviceKey];
+          if (
+            device.device_id === numericId ||
+            device.hex_id === hexId ||
+            device.id === numericId ||
+            deviceKey === numericId.toString() ||
+            deviceKey === hexId
+          ) {
+            targetDevice = device;
+            targetDeviceKey = deviceKey;
+            break;
+          }
         }
       }
 
@@ -2320,15 +2487,18 @@ onMounted(async () => {
     // Очищаем кэш фильтрованных устройств для новых границ
     filteredDevicesCache.value.clear();
 
+    // Объединяем обычные устройства и meshcore устройства
+    const allDevices = { ...devices?.value, ...meshcoreDevices?.value };
+
     // Проверяем, что данные загружены и не пустые
-    if (!devices || !devices.value || Object.keys(devices.value).length === 0) {
+    if (!allDevices || Object.keys(allDevices).length === 0) {
       return;
     }
 
     // Перерисовываем маркеры с учетом новых границ карты
     // НЕ очищаем все маркеры, а перерисовываем их
     renderBallons(
-      devices?.value,
+      allDevices,
       false, // isUpdate = false, так как это не обновление данных
       openedBalloonInfo,
       openedBalloonContent
@@ -2501,10 +2671,12 @@ onMounted(async () => {
 
     // Добавляем небольшую задержку для инициализации карты
     setTimeout(() => {
-      debouncedRenderBallons(devices?.value, false, null, null);
+      // Объединяем обычные устройства и meshcore устройства
+      const allDevices = { ...devices?.value, ...meshcoreDevices?.value };
+      debouncedRenderBallons(allDevices, false, null, null);
 
       // Вызываем onBoundsChange только после загрузки данных об устройствах
-      if (devices?.value && Object.keys(devices.value).length > 0) {
+      if (allDevices && Object.keys(allDevices).length > 0) {
         onBoundsChange();
       }
     }, 100);
@@ -2521,15 +2693,24 @@ onMounted(async () => {
       pointsOnMap.value = 0;
       filteredDevicesCache.value.clear();
       renderSelfBallon(false);
-      debouncedRenderBallons(newDevices, false, null, null);
+      // Объединяем обычные устройства и meshcore устройства
+      const allDevices = { ...newDevices, ...meshcoreDevices.value };
+      debouncedRenderBallons(allDevices, false, null, null);
       renderPath(openedNodeId);
 
       // Вызываем onBoundsChange при изменении данных об устройствах
-      if (newDevices && Object.keys(newDevices).length > 0) {
+      if (allDevices && Object.keys(allDevices).length > 0) {
         setTimeout(() => {
           onBoundsChange();
         }, 150);
       }
+    });
+
+    // Также отслеживаем изменения meshcore устройств
+    watch(meshcoreDevices, (newMeshcoreDevices) => {
+      // Объединяем обычные устройства и meshcore устройства
+      const allDevices = { ...devices.value, ...newMeshcoreDevices };
+      debouncedRenderBallons(allDevices, false, null, null);
     });
   };
 
