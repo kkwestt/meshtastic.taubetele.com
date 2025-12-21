@@ -575,48 +575,38 @@ const createBalloonContent = async (device, nodeId) => {
     <div style="font-weight: bold; margin-bottom: 2px;">Данные о позиции: ${formatTime(device.s_time)}</div>
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
     <span>Координаты:</span><span>
-      <a href="${googleMapsLink}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${lat.toFixed(4)}, ${lon.toFixed(4)}</a>
-      <span style="margin-left: 4px; color: #999; font-size: 10px;">
-        (<a href="${yandexMapsLink}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none;">Яндекс</a>)
-      </span>
+      <a href="${yandexMapsLink}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${lat.toFixed(4)}, ${lon.toFixed(4)}</a>
     </span>
     </div>
     </div>
     `;
     }
 
-    // Информация о шлюзе с ссылкой для фокусировки
+    // Информация об устройстве MESHCORE
+    nodeInfoHtml = `
+    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
+    ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
+    ${device.device_id ? `<span>ID:</span><span title="${device.device_id}">${truncateId(device.device_id)}</span>` : ""}
+    </div>
+    </div>
+    `;
+
+    // Информация о шлюзе (Gateway) с ссылкой для фокусировки
+    let gatewayInfoHtml = "";
     if (device.gateway_origin_id) {
       // Добавляем префикс "!" если его нет для корректной обработки hex ID
       const gatewayHexId = device.gateway_origin_id.startsWith("!") 
         ? device.gateway_origin_id 
         : `!${device.gateway_origin_id}`;
       const gatewayLongName = await getGatewayLongName(gatewayHexId);
-      const gatewayDisplayName = gatewayLongName || device.gateway_origin || device.gateway_origin_id;
       
-      nodeInfoHtml = `
+      gatewayInfoHtml = `
     <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
-    <div style="font-weight: bold; margin-bottom: 2px;">Информация об устройстве сети MESHCORE</div>
+    <div style="font-weight: bold; margin-bottom: 2px;">Gateway</div>
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
-    ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
-    ${device.device_id ? `<span>ID:</span><span title="${device.device_id}">${truncateId(device.device_id)}</span>` : ""}
-    </div>
-    ${device.gateway_origin_id ? `
-    <div style="font-size: 10px; color: #666; margin-top: 4px; line-height: 1.2;">
-      Gateway: <a href="#" onclick="focusOnDeviceByHex('${gatewayHexId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayDisplayName}</a>${device.gateway_origin ? ` Источник: ${device.gateway_origin}` : ""}
-    </div>
-    ` : ""}
-    </div>
-    `;
-    } else if (device.name || device.device_id) {
-      // Если нет шлюза, но есть другие данные
-      nodeInfoHtml = `
-    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
-    <div style="font-weight: bold; margin-bottom: 2px;">Информация об устройстве сети MESHCORE</div>
-    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
-    ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
-    ${device.device_id ? `<span>ID:</span><span title="${device.device_id}">${truncateId(device.device_id)}</span>` : ""}
-    ${device.gateway_origin ? `<span>Источник:</span><span>${device.gateway_origin}</span>` : ""}
+    ${device.gateway_origin ? `<span>Имя:</span><span>${device.gateway_origin}</span>` : ""}
+    ${device.gateway_origin_id ? `<span>ID:</span><span><a href="#" onclick="focusOnDeviceByHex('${gatewayHexId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;" title="${gatewayHexId}">${truncateId(gatewayHexId)}</a></span>` : ""}
     </div>
     </div>
     `;
@@ -626,6 +616,7 @@ const createBalloonContent = async (device, nodeId) => {
     return `
     <div style="max-width: 350px; font-size: 12px;">
     ${nodeInfoHtml}
+    ${gatewayInfoHtml}
     ${positionInfoHtml}
     </div>
     `;
@@ -1771,11 +1762,16 @@ const renderBallons = (
 
       const timestampfooter = formatTime(device.s_time);
 
+      // Формируем заголовок баллуна - не дублируем имя, если longName и shortName одинаковые
+      const balloonHeader = device.longName === device.shortName 
+        ? device.longName 
+        : `${device.longName} (${device.shortName})`;
+
       const placemark = new window.ymaps.Placemark(
         [device.latitude, device.longitude],
         {
           iconContent: device.shortName,
-          balloonContentHeader: device.longName + " (" + device.shortName + ")",
+          balloonContentHeader: balloonHeader,
           balloonContentBody: `
     <div style="max-width: 350px; font-size: 12px;">
 
