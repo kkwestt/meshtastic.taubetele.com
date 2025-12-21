@@ -210,6 +210,18 @@ const formatTime = (timestamp) => {
   }
 };
 
+// Функция для сокращения длинных ID
+const truncateId = (id) => {
+  if (!id || typeof id !== 'string') return id;
+  
+  // Если ID длиннее 12 символов, сокращаем его
+  if (id.length > 12) {
+    return `${id.substring(0, 5)}...${id.substring(id.length - 4)}`;
+  }
+  
+  return id;
+};
+
 // Функция для получения longname по hex ID
 const getGatewayLongName = async (hexId) => {
   if (!hexId) return null;
@@ -587,11 +599,11 @@ const createBalloonContent = async (device, nodeId) => {
     <div style="font-weight: bold; margin-bottom: 2px;">Информация об устройстве сети MESHCORE</div>
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
     ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
-    ${device.device_id ? `<span>ID:</span><span>${device.device_id}</span>` : ""}
+    ${device.device_id ? `<span>ID:</span><span title="${device.device_id}">${truncateId(device.device_id)}</span>` : ""}
     </div>
     ${device.gateway_origin_id ? `
     <div style="font-size: 10px; color: #666; margin-top: 4px; line-height: 1.2;">
-      Gateway: <a href="#" onclick="focusOnDeviceByHex('${gatewayHexId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayDisplayName}</a>${device.gateway_origin ? `Источник: ${device.gateway_origin}` : ""}
+      Gateway: <a href="#" onclick="focusOnDeviceByHex('${gatewayHexId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${gatewayDisplayName}</a>${device.gateway_origin ? ` Источник: ${device.gateway_origin}` : ""}
     </div>
     ` : ""}
     </div>
@@ -603,7 +615,7 @@ const createBalloonContent = async (device, nodeId) => {
     <div style="font-weight: bold; margin-bottom: 2px;">Информация об устройстве сети MESHCORE</div>
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
     ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
-    ${device.device_id ? `<span>ID:</span><span>${device.device_id}</span>` : ""}
+    ${device.device_id ? `<span>ID:</span><span title="${device.device_id}">${truncateId(device.device_id)}</span>` : ""}
     ${device.gateway_origin ? `<span>Источник:</span><span>${device.gateway_origin}</span>` : ""}
     </div>
     </div>
