@@ -130,7 +130,16 @@ const filterDevicesByBounds = (devices, bounds) => {
   for (const index in devices) {
     const device = devices[index];
 
-    if (!device.latitude || !device.longitude) continue;
+    // Проверяем наличие координат (пропускаем null, undefined и 0,0)
+    if (
+      device.latitude === null ||
+      device.latitude === undefined ||
+      device.longitude === null ||
+      device.longitude === undefined ||
+      (device.latitude === 0 && device.longitude === 0)
+    ) {
+      continue;
+    }
 
     const deviceTime = device.s_time;
     const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
@@ -1704,13 +1713,25 @@ const renderBallons = (
 
     let filteredByTime = 0;
     let filteredByBounds = 0;
+    let filteredByCoords = 0;
+    let filteredByIcon = 0;
     let totalDevices = Object.keys(devices).length;
 
     for (const index in devices) {
       const device = devices[index];
       const nodeId = device.device_id || device.hex_id || device.id || index;
 
-      if (!device.latitude || !device.longitude) continue;
+      // Проверяем наличие координат (пропускаем null, undefined и 0,0)
+      if (
+        device.latitude === null ||
+        device.latitude === undefined ||
+        device.longitude === null ||
+        device.longitude === undefined ||
+        (device.latitude === 0 && device.longitude === 0)
+      ) {
+        filteredByCoords++;
+        continue;
+      }
 
       const deviceTime = device.s_time;
       const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
@@ -1751,14 +1772,19 @@ const renderBallons = (
         iconOptions = {
           preset: `${presetcolor}`,
         };
-      } else if (timeDiffHours >= 6) {
-        // Если точка не передавала данные больше 6 часов - серая
+      } else if (timeDiffHours >= 6 && timeDiffHours <= 24) {
+        // Если точка не передавала данные больше 6 часов, но меньше 24 - серая
         presetcolor = MAP_PRESETS.INACTIVE;
         iconOptions = {
           preset: `${presetcolor}`,
         };
       }
-      // Иначе точку не показываем (iconOptions остается пустым)
+      
+      // Если iconOptions пустой, пропускаем устройство
+      if (!iconOptions.preset) {
+        filteredByIcon++;
+        continue;
+      }
 
       const timestampfooter = formatTime(device.s_time);
 
@@ -1848,6 +1874,17 @@ const renderBallons = (
       });
 
       pointsOnMap.value = placemarks.length;
+      
+      // Логирование для отладки
+      console.log(`📊 Статистика фильтрации устройств:`, {
+        всего: totalDevices,
+        отфильтровано_координаты: filteredByCoords,
+        отфильтровано_время: filteredByTime,
+        отфильтровано_границы: filteredByBounds,
+        отфильтровано_иконка: filteredByIcon,
+        отображено: placemarks.length,
+      });
+      
       return;
     }
 
@@ -1898,6 +1935,17 @@ const renderBallons = (
     // Для кластеризации считаем количество кластеров, а не маркеров
     const clusters = clusterer.getClusters();
     pointsOnMap.value = clusters.length;
+    
+    // Логирование для отладки
+    console.log(`📊 Статистика фильтрации устройств (кластеры):`, {
+      всего: totalDevices,
+      отфильтровано_координаты: filteredByCoords,
+      отфильтровано_время: filteredByTime,
+      отфильтровано_границы: filteredByBounds,
+      отфильтровано_иконка: filteredByIcon,
+      кластеров: clusters.length,
+      маркеров: placemarks.length,
+    });
   } catch (error) {
     console.error("❌ Ошибка в renderBallons:", error);
     pointsOnMap.value = 0;
