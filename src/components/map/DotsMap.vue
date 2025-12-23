@@ -28,6 +28,33 @@
       }}</span>
     </div>
 
+    <!-- Переключатели источников данных -->
+    <div class="source-toggle-panel">
+      <div class="source-toggle-header">Источники данных</div>
+      <label class="source-toggle-item">
+        <input
+          type="checkbox"
+          v-model="showMeshtastic"
+          @change="handleSourceToggle"
+        />
+        <span class="toggle-label">
+          <span class="toggle-indicator meshtastic"></span>
+          Meshtastic
+        </span>
+      </label>
+      <label class="source-toggle-item">
+        <input
+          type="checkbox"
+          v-model="showMeshcore"
+          @change="handleSourceToggle"
+        />
+        <span class="toggle-label">
+          <span class="toggle-indicator meshcore"></span>
+          Meshcore
+        </span>
+      </label>
+    </div>
+
     <!-- Кнопка закрытия истории местоположений -->
     <div
       class="close-history-button"
@@ -106,6 +133,41 @@ const selectedDeviceName = ref("");
 const isLocationHistoryActive = ref(false);
 const locationHistories = ref([]); // Array to store multiple location histories
 let historyColorIndex = 0; // Index for rotating through colors
+
+// Переключатели источников данных
+const showMeshtastic = ref(true);
+const showMeshcore = ref(true);
+
+// Функция для объединения устройств с учетом переключателей
+const getAllDevices = () => {
+  const allDevices = {};
+  
+  if (showMeshtastic.value && devices.value) {
+    Object.assign(allDevices, devices.value);
+  }
+  
+  if (showMeshcore.value && meshcoreDevices.value) {
+    Object.assign(allDevices, meshcoreDevices.value);
+  }
+  
+  return allDevices;
+};
+
+// Обработчик переключения источников данных
+const handleSourceToggle = () => {
+  // Очищаем кэш фильтрованных устройств
+  filteredDevicesCache.value.clear();
+  
+  // Обновляем счетчик узлов
+  const allDevices = getAllDevices();
+  const count = Object.keys(allDevices).length;
+  emit("devicesCount", count, allDevices);
+  
+  // Перерисовываем маркеры с учетом новых настроек
+  if (typeof debouncedRenderBallons === "function") {
+    debouncedRenderBallons(allDevices, false, null, null);
+  }
+};
 
 const clearGeolocationStatus = () => {
   setTimeout(() => {
@@ -2024,7 +2086,7 @@ const fetchDevicesData = async () => {
       await fetchMeshcoreData();
 
       // Объединяем данные для отображения
-      const allDevices = { ...devices.value, ...meshcoreDevices.value };
+      const allDevices = getAllDevices();
       if (typeof debouncedRenderBallons === "function") {
         debouncedRenderBallons(allDevices, false, null, null);
       }
@@ -2034,8 +2096,9 @@ const fetchDevicesData = async () => {
 
       // Загружаем meshcore данные даже если обычные данные пусты
       await fetchMeshcoreData();
+      const allDevices = getAllDevices();
       if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(meshcoreDevices.value, false, null, null);
+        debouncedRenderBallons(allDevices, false, null, null);
       }
     }
   } catch (error) {
@@ -2060,8 +2123,9 @@ const fetchDevicesData = async () => {
 
     // Пытаемся загрузить meshcore данные даже при ошибке обычных данных
     await fetchMeshcoreData();
+    const allDevices = getAllDevices();
     if (typeof debouncedRenderBallons === "function") {
-      debouncedRenderBallons(meshcoreDevices.value, false, null, null);
+      debouncedRenderBallons(allDevices, false, null, null);
     }
 
     // Автоматически скрываем ошибку через 10 секунд
@@ -2141,7 +2205,7 @@ const updateDevicesData = async () => {
     await fetchMeshcoreData();
 
     // Объединяем данные для отображения
-    const allDevices = { ...devices.value, ...meshcoreDevices.value };
+    const allDevices = getAllDevices();
     if (typeof debouncedRenderBallons === "function") {
       debouncedRenderBallons(allDevices, true, null, null);
     }
@@ -2149,8 +2213,9 @@ const updateDevicesData = async () => {
     console.error("❌ Ошибка обновления данных устройств:", error);
     // Пытаемся обновить meshcore данные даже при ошибке обычных данных
     await fetchMeshcoreData();
+    const allDevices = getAllDevices();
     if (typeof debouncedRenderBallons === "function") {
-      debouncedRenderBallons(meshcoreDevices.value, true, null, null);
+      debouncedRenderBallons(allDevices, true, null, null);
     }
   }
 };
@@ -2544,7 +2609,7 @@ onMounted(async () => {
     filteredDevicesCache.value.clear();
 
     // Объединяем обычные устройства и meshcore устройства
-    const allDevices = { ...devices?.value, ...meshcoreDevices?.value };
+    const allDevices = getAllDevices();
 
     // Проверяем, что данные загружены и не пустые
     if (!allDevices || Object.keys(allDevices).length === 0) {
@@ -2728,7 +2793,7 @@ onMounted(async () => {
     // Добавляем небольшую задержку для инициализации карты
     setTimeout(() => {
       // Объединяем обычные устройства и meshcore устройства
-      const allDevices = { ...devices?.value, ...meshcoreDevices?.value };
+      const allDevices = getAllDevices();
       debouncedRenderBallons(allDevices, false, null, null);
 
       // Вызываем onBoundsChange только после загрузки данных об устройствах
@@ -2750,7 +2815,7 @@ onMounted(async () => {
       filteredDevicesCache.value.clear();
       renderSelfBallon(false);
       // Объединяем обычные устройства и meshcore устройства
-      const allDevices = { ...newDevices, ...meshcoreDevices.value };
+      const allDevices = getAllDevices();
       debouncedRenderBallons(allDevices, false, null, null);
       renderPath(openedNodeId);
 
@@ -2763,9 +2828,9 @@ onMounted(async () => {
     });
 
     // Также отслеживаем изменения meshcore устройств
-    watch(meshcoreDevices, (newMeshcoreDevices) => {
+    watch(meshcoreDevices, () => {
       // Объединяем обычные устройства и meshcore устройства
-      const allDevices = { ...devices.value, ...newMeshcoreDevices };
+      const allDevices = getAllDevices();
       debouncedRenderBallons(allDevices, false, null, null);
     });
   };
@@ -2874,7 +2939,7 @@ onMounted(async () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(0, 0, 0, 0.1);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  z-index: 1000;
+  z-index: 1001;
   user-select: none;
   pointer-events: none;
   max-width: 300px;
@@ -2929,6 +2994,96 @@ onMounted(async () => {
   svg {
     width: 16px;
     height: 16px;
+  }
+}
+
+.source-toggle-panel {
+  position: absolute;
+  top: 60px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(5px);
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  z-index: 999;
+  user-select: none;
+  min-width: 180px;
+}
+
+.source-toggle-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.source-toggle-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px 0;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+  padding-left: 4px;
+  margin-left: -4px;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+  }
+
+  input[type="checkbox"] {
+    margin: 0;
+    margin-right: 8px;
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: #2563eb;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #374151;
+    font-weight: 500;
+    cursor: pointer;
+    flex: 1;
+  }
+
+  .toggle-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+
+    &.meshtastic {
+      background-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    &.meshcore {
+      background-color: #f97316;
+      box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2);
+    }
+  }
+
+  input[type="checkbox"]:checked + .toggle-label {
+    color: #1f2937;
+  }
+
+  input[type="checkbox"]:not(:checked) + .toggle-label {
+    opacity: 0.6;
+
+    .toggle-indicator {
+      opacity: 0.4;
+    }
   }
 }
 </style>
