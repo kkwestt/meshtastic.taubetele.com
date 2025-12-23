@@ -153,24 +153,24 @@ const getAllDevices = () => {
     }
   }
   
-  // Затем добавляем meshcore устройства с префиксом, чтобы избежать конфликтов
-  // Если устройство уже есть в meshtastic, добавляем meshcore версию с другим ключом
+  // Затем добавляем meshcore устройства
+  // ВСЕГДА используем префикс для meshcore, чтобы избежать любых конфликтов
   if (showMeshcore.value && meshcoreDevices.value) {
     for (const deviceId in meshcoreDevices.value) {
       const meshcoreDevice = meshcoreDevices.value[deviceId];
+      
+      // Всегда используем префикс для meshcore устройств
+      const meshcoreKey = `meshcore_${deviceId}`;
       
       // Проверяем, есть ли уже устройство с таким device_id в meshtastic
       const existingMeshtastic = showMeshtastic.value && devices.value[deviceId];
       
       if (existingMeshtastic) {
-        // Если устройство есть в обоих источниках, добавляем meshcore версию с префиксом
-        const meshcoreKey = `meshcore_${deviceId}`;
-        allDevices[meshcoreKey] = meshcoreDevice;
         conflicts++;
-      } else {
-        // Если устройства нет в meshtastic, добавляем meshcore версию с оригинальным ключом
-        allDevices[deviceId] = meshcoreDevice;
       }
+      
+      // Всегда добавляем meshcore устройство с префиксом
+      allDevices[meshcoreKey] = meshcoreDevice;
       meshcoreAdded++;
     }
   }
@@ -182,6 +182,7 @@ const getAllDevices = () => {
     всего_в_результате: Object.keys(allDevices).length,
     showMeshtastic: showMeshtastic.value,
     showMeshcore: showMeshcore.value,
+    meshcore_устройств_в_данных: meshcoreDevices.value ? Object.keys(meshcoreDevices.value).length : 0,
   });
   
   return allDevices;
@@ -1813,14 +1814,20 @@ const renderBallons = (
     let filteredByIcon = 0;
     let meshcoreCount = 0;
     let meshtasticCount = 0;
+    let meshcoreFilteredByCoords = 0;
+    let meshcoreFilteredByTime = 0;
+    let meshcoreFilteredByBounds = 0;
+    let meshcoreFilteredByIcon = 0;
+    let meshcorePassed = 0;
     let totalDevices = Object.keys(devices).length;
 
     for (const index in devices) {
       const device = devices[index];
       const nodeId = device.device_id || device.hex_id || device.id || index;
+      const isMeshcoreDevice = device.isMeshcore === true;
 
       // Подсчитываем устройства по источникам
-      if (device.isMeshcore) {
+      if (isMeshcoreDevice) {
         meshcoreCount++;
       } else {
         meshtasticCount++;
@@ -1835,6 +1842,7 @@ const renderBallons = (
         (device.latitude === 0 && device.longitude === 0)
       ) {
         filteredByCoords++;
+        if (isMeshcoreDevice) meshcoreFilteredByCoords++;
         continue;
       }
 
@@ -1843,6 +1851,7 @@ const renderBallons = (
 
       if (timeDiffHours > 24) {
         filteredByTime++;
+        if (isMeshcoreDevice) meshcoreFilteredByTime++;
         continue;
       }
 
@@ -1852,6 +1861,7 @@ const renderBallons = (
       if (bounds) {
         if (!isPointInBounds(device.latitude, device.longitude, bounds)) {
           filteredByBounds++;
+          if (isMeshcoreDevice) meshcoreFilteredByBounds++;
           continue;
         }
       }
@@ -1888,7 +1898,13 @@ const renderBallons = (
       // Если iconOptions пустой, пропускаем устройство
       if (!iconOptions.preset) {
         filteredByIcon++;
+        if (isMeshcoreDevice) meshcoreFilteredByIcon++;
         continue;
+      }
+      
+      // Подсчитываем прошедшие фильтрацию meshcore устройства
+      if (isMeshcoreDevice) {
+        meshcorePassed++;
       }
 
       const timestampfooter = formatTime(device.s_time);
@@ -1984,7 +2000,14 @@ const renderBallons = (
       console.log(`📊 Статистика фильтрации устройств:`, {
         всего: totalDevices,
         meshtastic: meshtasticCount,
-        meshcore: meshcoreCount,
+        meshcore: {
+          всего: meshcoreCount,
+          отфильтровано_координаты: meshcoreFilteredByCoords,
+          отфильтровано_время: meshcoreFilteredByTime,
+          отфильтровано_границы: meshcoreFilteredByBounds,
+          отфильтровано_иконка: meshcoreFilteredByIcon,
+          прошло_фильтрацию: meshcorePassed,
+        },
         отфильтровано_координаты: filteredByCoords,
         отфильтровано_время: filteredByTime,
         отфильтровано_границы: filteredByBounds,
@@ -2047,7 +2070,14 @@ const renderBallons = (
     console.log(`📊 Статистика фильтрации устройств (кластеры):`, {
       всего: totalDevices,
       meshtastic: meshtasticCount,
-      meshcore: meshcoreCount,
+      meshcore: {
+        всего: meshcoreCount,
+        отфильтровано_координаты: meshcoreFilteredByCoords,
+        отфильтровано_время: meshcoreFilteredByTime,
+        отфильтровано_границы: meshcoreFilteredByBounds,
+        отфильтровано_иконка: meshcoreFilteredByIcon,
+        прошло_фильтрацию: meshcorePassed,
+      },
       отфильтровано_координаты: filteredByCoords,
       отфильтровано_время: filteredByTime,
       отфильтровано_границы: filteredByBounds,
