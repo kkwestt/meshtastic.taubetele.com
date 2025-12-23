@@ -141,14 +141,48 @@ const showMeshcore = ref(true);
 // Функция для объединения устройств с учетом переключателей
 const getAllDevices = () => {
   const allDevices = {};
+  let meshtasticAdded = 0;
+  let meshcoreAdded = 0;
+  let conflicts = 0;
   
+  // Сначала добавляем meshtastic устройства
   if (showMeshtastic.value && devices.value) {
-    Object.assign(allDevices, devices.value);
+    for (const deviceId in devices.value) {
+      allDevices[deviceId] = devices.value[deviceId];
+      meshtasticAdded++;
+    }
   }
   
+  // Затем добавляем meshcore устройства с префиксом, чтобы избежать конфликтов
+  // Если устройство уже есть в meshtastic, добавляем meshcore версию с другим ключом
   if (showMeshcore.value && meshcoreDevices.value) {
-    Object.assign(allDevices, meshcoreDevices.value);
+    for (const deviceId in meshcoreDevices.value) {
+      const meshcoreDevice = meshcoreDevices.value[deviceId];
+      
+      // Проверяем, есть ли уже устройство с таким device_id в meshtastic
+      const existingMeshtastic = showMeshtastic.value && devices.value[deviceId];
+      
+      if (existingMeshtastic) {
+        // Если устройство есть в обоих источниках, добавляем meshcore версию с префиксом
+        const meshcoreKey = `meshcore_${deviceId}`;
+        allDevices[meshcoreKey] = meshcoreDevice;
+        conflicts++;
+      } else {
+        // Если устройства нет в meshtastic, добавляем meshcore версию с оригинальным ключом
+        allDevices[deviceId] = meshcoreDevice;
+      }
+      meshcoreAdded++;
+    }
   }
+  
+  console.log(`📊 Объединение устройств:`, {
+    meshtastic_добавлено: meshtasticAdded,
+    meshcore_добавлено: meshcoreAdded,
+    конфликтов: conflicts,
+    всего_в_результате: Object.keys(allDevices).length,
+    showMeshtastic: showMeshtastic.value,
+    showMeshcore: showMeshcore.value,
+  });
   
   return allDevices;
 };
@@ -1777,11 +1811,20 @@ const renderBallons = (
     let filteredByBounds = 0;
     let filteredByCoords = 0;
     let filteredByIcon = 0;
+    let meshcoreCount = 0;
+    let meshtasticCount = 0;
     let totalDevices = Object.keys(devices).length;
 
     for (const index in devices) {
       const device = devices[index];
       const nodeId = device.device_id || device.hex_id || device.id || index;
+
+      // Подсчитываем устройства по источникам
+      if (device.isMeshcore) {
+        meshcoreCount++;
+      } else {
+        meshtasticCount++;
+      }
 
       // Проверяем наличие координат (пропускаем null, undefined и 0,0)
       if (
@@ -1940,6 +1983,8 @@ const renderBallons = (
       // Логирование для отладки
       console.log(`📊 Статистика фильтрации устройств:`, {
         всего: totalDevices,
+        meshtastic: meshtasticCount,
+        meshcore: meshcoreCount,
         отфильтровано_координаты: filteredByCoords,
         отфильтровано_время: filteredByTime,
         отфильтровано_границы: filteredByBounds,
@@ -2001,6 +2046,8 @@ const renderBallons = (
     // Логирование для отладки
     console.log(`📊 Статистика фильтрации устройств (кластеры):`, {
       всего: totalDevices,
+      meshtastic: meshtasticCount,
+      meshcore: meshcoreCount,
       отфильтровано_координаты: filteredByCoords,
       отфильтровано_время: filteredByTime,
       отфильтровано_границы: filteredByBounds,
@@ -2028,8 +2075,23 @@ const fetchMeshcoreData = async () => {
     if (data && data.data) {
       // Преобразуем данные meshcore в формат, совместимый с обычными устройствами
       const normalizedMeshcore = {};
+      let totalMeshcore = 0;
+      let withCoords = 0;
+      let withoutCoords = 0;
+      
       for (const deviceId in data.data) {
         const device = data.data[deviceId];
+        totalMeshcore++;
+        
+        // Проверяем наличие координат
+        if (device.lat !== null && device.lat !== undefined && 
+            device.lon !== null && device.lon !== undefined &&
+            !(device.lat === 0 && device.lon === 0)) {
+          withCoords++;
+        } else {
+          withoutCoords++;
+        }
+        
         normalizedMeshcore[deviceId] = {
           device_id: device.device_id,
           hex_id: device.device_id,
@@ -2045,6 +2107,13 @@ const fetchMeshcoreData = async () => {
           gateway_origin_id: device.gateway_origin_id, // ID шлюза для ссылки
         };
       }
+      
+      console.log(`📊 Meshcore данные загружены:`, {
+        всего: totalMeshcore,
+        с_координатами: withCoords,
+        без_координат: withoutCoords,
+      });
+      
       meshcoreDevices.value = normalizedMeshcore;
     } else {
       meshcoreDevices.value = {};
