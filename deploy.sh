@@ -1,0 +1,57 @@
+#!/bin/bash
+
+set -e
+
+echo "🚀 Деплой Meshtastic Frontend на порт 82..."
+
+# Загружаем переменные окружения из .env файла
+if [ -f .env ]; then
+    echo "📋 Загрузка переменных окружения из .env..."
+    export $(cat .env | grep -v '^#' | xargs)
+else
+    echo "⚠️  Файл .env не найден! Создайте его с VITE_YANDEX_MAPS_API_KEY"
+    exit 1
+fi
+
+# Проверяем наличие обязательной переменной
+if [ -z "$VITE_YANDEX_MAPS_API_KEY" ]; then
+    echo "❌ VITE_YANDEX_MAPS_API_KEY не установлен в .env файле!"
+    exit 1
+fi
+
+echo "✅ API ключ найден: ${VITE_YANDEX_MAPS_API_KEY:0:10}..."
+
+# Останавливаем если запущен
+echo "⏹️  Остановка контейнера..."
+sudo -E docker-compose down 2>/dev/null || true
+
+# Удаляем конкретный контейнер если существует
+echo "🗑️  Удаление старого контейнера..."
+sudo docker rm -f meshtastic_taubetele_com_82 2>/dev/null || true
+
+# Очистка неиспользуемых образов
+echo "🧹 Очистка неиспользуемых образов..."
+sudo docker image prune -f
+
+# Сборка (передаем переменные окружения через sudo)
+echo "🔨 Сборка образа..."
+sudo -E docker-compose build --no-cache
+
+# Запуск (передаем переменные окружения через sudo)
+echo "▶️  Запуск..."
+sudo -E docker-compose up -d
+
+# Проверка
+echo "⏳ Проверка запуска..."
+sleep 5
+
+if sudo docker ps | grep -q "meshtastic_taubetele_com_82"; then
+    echo "✅ Контейнер meshtastic_taubetele_com_82 запущен"
+    echo "🌐 Приложение доступно на порту 82"
+else
+    echo "❌ Ошибка запуска"
+    sudo -E docker-compose logs
+    exit 1
+fi
+
+echo "🎉 Деплой завершен!"
