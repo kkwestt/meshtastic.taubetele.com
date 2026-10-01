@@ -278,11 +278,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, computed, watch } from "vue";
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from "vue";
 import { meshtasticApi } from "../utils/api.js";
-import { Chart, registerables } from "chart.js";
+import {
+  Chart,
+  LineController,
+  LineElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  Filler,
+  Legend,
+  Tooltip,
+} from "chart.js";
 
-Chart.register(...registerables);
+// Регистрируем только используемые части Chart.js (tree-shaking)
+Chart.register(
+  LineController,
+  LineElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  Filler,
+  Legend,
+  Tooltip
+);
 
 const props = defineProps({
   nodeId: {
@@ -423,9 +443,15 @@ const fetchAllData = async () => {
     loading.value = true;
     error.value = null;
 
+    // Запускаем все запросы параллельно, обрабатываем по мере надобности
+    const positionPromise = meshtasticApi.getPositionInfo(props.nodeId);
+    const telemetryPromise = meshtasticApi.getTelemetryInfo(props.nodeId);
+    const nodeInfoPromise = meshtasticApi.getNodeInfo(props.nodeId);
+    const textMessagesPromise = meshtasticApi.getTextMessages(props.nodeId);
+
     // Fetch Position Data
     try {
-      const positionInfo = await meshtasticApi.getPositionInfo(props.nodeId);
+      const positionInfo = await positionPromise;
       if (positionInfo?.data?.length > 0) {
         const positions = [];
         const posSnr = [];
@@ -484,7 +510,7 @@ const fetchAllData = async () => {
 
     // Fetch Telemetry Data
     try {
-      const telemetryInfo = await meshtasticApi.getTelemetryInfo(props.nodeId);
+      const telemetryInfo = await telemetryPromise;
       if (telemetryInfo?.data?.length > 0) {
         const battery = [];
         const voltage = [];
@@ -591,7 +617,7 @@ const fetchAllData = async () => {
       const rssiData = [];
       const hopLimitData = [];
 
-      const nodeInfo = await meshtasticApi.getNodeInfo(props.nodeId);
+      const nodeInfo = await nodeInfoPromise;
       if (nodeInfo?.data?.length > 0) {
         nodeInfo.data.forEach((entry) => {
           if (entry.rxSnr !== undefined && entry.rxSnr !== 0) {
@@ -633,7 +659,7 @@ const fetchAllData = async () => {
 
     // Fetch Text Messages
     try {
-      const textMessages = await meshtasticApi.getTextMessages(props.nodeId);
+      const textMessages = await textMessagesPromise;
       if (textMessages?.data?.length > 0) {
         const messages = [];
         const msgSnr = [];
@@ -1538,6 +1564,8 @@ const cleanup = () => {
   });
   chartInstances.length = 0;
 };
+
+onUnmounted(cleanup);
 
 defineExpose({ cleanup });
 </script>

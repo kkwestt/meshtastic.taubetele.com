@@ -20,13 +20,18 @@
 
       <div class="search-results" v-if="searchResults.length > 0">
         <div class="results-header">
-          <h3>Результаты поиска ({{ searchResults.length }})</h3>
+          <h3>
+            Результаты поиска ({{ searchResults.length }})
+            <span v-if="searchResults.length > visibleResults.length">
+              — показаны первые {{ visibleResults.length }}
+            </span>
+          </h3>
           <button @click="clearResults" class="clear-button">Очистить</button>
         </div>
 
         <div class="results-list">
           <div
-            v-for="result in searchResults"
+            v-for="result in visibleResults"
             :key="getDeviceKey(result.device)"
             class="device-item"
           >
@@ -118,12 +123,16 @@
 </template>
 
 <script setup>
-import { ref, computed } from "vue";
+import { ref, shallowRef, computed } from "vue";
+import { debounce } from "../utils/helpers.js";
+
+// Сколько результатов рендерить в DOM — тысячи строк сильно тормозят на мобильных
+const MAX_VISIBLE_RESULTS = 200;
 
 const emit = defineEmits(["close", "selectDevice", "openCharts"]);
 
 const searchQuery = ref("");
-const searchResults = ref([]);
+const searchResults = shallowRef([]);
 const hasSearched = ref(false);
 
 // Получаем устройства из родительского компонента
@@ -134,6 +143,12 @@ const props = defineProps({
   },
 });
 
+const visibleResults = computed(() =>
+  searchResults.value.slice(0, MAX_VISIBLE_RESULTS)
+);
+
+const debouncedSearch = debounce(() => performSearch(), 250);
+
 const handleSearch = () => {
   if (searchQuery.value.length < 2) {
     searchResults.value = [];
@@ -141,7 +156,7 @@ const handleSearch = () => {
     return;
   }
 
-  performSearch();
+  debouncedSearch();
 };
 
 const performSearch = () => {

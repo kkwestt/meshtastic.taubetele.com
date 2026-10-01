@@ -229,16 +229,21 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, shallowRef, defineAsyncComponent } from "vue";
 import DotsMap from "./components/map/DotsMap.vue";
-import Modal from "./components/Modal.vue";
-import SearchModal from "./components/SearchModal.vue";
+
+// Модальные окна грузим по требованию — не нужны для первого рендера карты
+const Modal = defineAsyncComponent(() => import("./components/Modal.vue"));
+const SearchModal = defineAsyncComponent(() =>
+  import("./components/SearchModal.vue")
+);
 
 const shouldShowInfoModal = ref(false);
 const shouldShowSearchModal = ref(false);
 const shouldShowDevicesModal = ref(false);
 const devicesCount = ref(0);
-const devices = ref({});
+// shallowRef: ~100k устройств не нужно оборачивать в глубокие реактивные прокси
+const devices = shallowRef({});
 
 const handleInfoOpen = () => {
   shouldShowInfoModal.value = true;

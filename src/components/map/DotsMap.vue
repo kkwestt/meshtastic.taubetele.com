@@ -1,11 +1,9 @@
 <template>
-  <div id="map" class="w-full h-full" @click="handleMapClick">
+  <div id="map" class="w-full h-full">
     <div class="node-counter">
-      <span v-if="Object.keys(devices).length === 0"
-        >🔄 Загрузка данных...</span
-      >
+      <span v-if="devicesTotal === 0">🔄 Загрузка данных...</span>
       <span v-else>
-        Узлов: {{ Object.keys(devices).length }} |
+        Узлов: {{ devicesTotal }} |
         <span
           v-if="
             map && map.getZoom() <= MAP_CONFIG.MIN_ZOOM_FOR_INDIVIDUAL_MARKERS
@@ -15,7 +13,7 @@
         </span>
         <span v-else> Видимых: {{ pointsOnMap }} </span>
       </span>
-      <div class="update-indicator" v-if="updateInterval">
+      <div class="update-indicator" v-if="isAutoUpdateActive">
         <span class="update-dot"></span>
         <span class="update-text">Автообновление 60сек</span>
       </div>
@@ -84,7 +82,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from "vue";
+import {
+  ref,
+  shallowRef,
+  computed,
+  onMounted,
+  onUnmounted,
+  defineAsyncComponent,
+} from "vue";
 import {
   MAP_CONFIG,
   MAP_PRESETS,
@@ -96,7 +101,9 @@ import {
 } from "../../utils/constants.js";
 import { debounce, isPointInBounds } from "../../utils/helpers.js";
 import { meshtasticApi } from "../../utils/api.js";
-import ChartModal from "../ChartModal.vue";
+
+// Chart.js тяжёлый — грузим модалку с графиками только при открытии
+const ChartModal = defineAsyncComponent(() => import("../ChartModal.vue"));
 
 const emit = defineEmits([
   "infoOpen",
@@ -114,19 +121,12 @@ const props = defineProps({
 
 let map, openedNodeId;
 
-const handleMapClick = (event) => {
-  const { nodeId } = event.target.dataset;
-  if (nodeId) {
-    // Обработка клика по узлу
-  }
-};
-
-const devices = ref({});
-const meshcoreDevices = ref({});
+// shallowRef: десятки тысяч устройств не оборачиваем в глубокие реактивные прокси
+const devices = shallowRef({});
+const meshcoreDevices = shallowRef({});
+const devicesTotal = computed(() => Object.keys(devices.value).length);
 const pointsOnMap = ref(0);
-const filteredDevicesCache = ref(new Map());
 const geolocationStatus = ref(null);
-const isDataLoaded = ref(false); // Флаг загрузки данных
 const showChartModal = ref(false);
 const selectedNodeId = ref(null);
 const selectedDeviceName = ref("");
@@ -138,123 +138,77 @@ let historyColorIndex = 0; // Index for rotating through colors
 const showMeshtastic = ref(true);
 const showMeshcore = ref(true);
 
+// Кэши объединённых данных — сбрасываются при новых данных или переключении источников
+let allDevicesCache = null;
+let displayDevicesCache = null;
+
+const invalidateDevicesCache = () => {
+  allDevicesCache = null;
+  displayDevicesCache = null;
+};
+
+const hasValidCoords = (device) =>
+  device.latitude !== null &&
+  device.latitude !== undefined &&
+  device.longitude !== null &&
+  device.longitude !== undefined &&
+  !(device.latitude === 0 && device.longitude === 0);
+
 // Функция для объединения устройств с учетом переключателей
 const getAllDevices = () => {
+  if (allDevicesCache) return allDevicesCache;
+
   const allDevices = {};
-  let meshtasticAdded = 0;
-  let meshcoreAdded = 0;
-  let conflicts = 0;
-  
+
   // Сначала добавляем meshtastic устройства
   if (showMeshtastic.value && devices.value) {
-    for (const deviceId in devices.value) {
-      allDevices[deviceId] = devices.value[deviceId];
-      meshtasticAdded++;
-    }
+    Object.assign(allDevices, devices.value);
   }
-  
+
   // Затем добавляем meshcore устройства
   // ВСЕГДА используем префикс для meshcore, чтобы избежать любых конфликтов
   if (showMeshcore.value && meshcoreDevices.value) {
     for (const deviceId in meshcoreDevices.value) {
-      const meshcoreDevice = meshcoreDevices.value[deviceId];
-      
-      // Всегда используем префикс для meshcore устройств
-      const meshcoreKey = `meshcore_${deviceId}`;
-      
-      // Проверяем, есть ли уже устройство с таким device_id в meshtastic
-      const existingMeshtastic = showMeshtastic.value && devices.value[deviceId];
-      
-      if (existingMeshtastic) {
-        conflicts++;
-      }
-      
-      // Всегда добавляем meshcore устройство с префиксом
-      allDevices[meshcoreKey] = meshcoreDevice;
-      meshcoreAdded++;
+      allDevices[`meshcore_${deviceId}`] = meshcoreDevices.value[deviceId];
     }
   }
-  
-  console.log(`📊 Объединение устройств:`, {
-    meshtastic_добавлено: meshtasticAdded,
-    meshcore_добавлено: meshcoreAdded,
-    конфликтов: conflicts,
-    всего_в_результате: Object.keys(allDevices).length,
-    showMeshtastic: showMeshtastic.value,
-    showMeshcore: showMeshcore.value,
-    meshcore_устройств_в_данных: meshcoreDevices.value ? Object.keys(meshcoreDevices.value).length : 0,
-  });
-  
+
+  allDevicesCache = allDevices;
   return allDevices;
+};
+
+// Только устройства, которые в принципе могут попасть на карту:
+// есть координаты и активность за последние 24 часа.
+// Обычно это несколько процентов от общего списка, поэтому
+// перерисовка при сдвиге карты проходит по гораздо меньшему набору.
+const getDisplayDevices = () => {
+  if (displayDevicesCache) return displayDevicesCache;
+
+  const allDevices = getAllDevices();
+  const result = {};
+  const minTime = Date.now() - 24 * 60 * 60 * 1000;
+
+  for (const key in allDevices) {
+    const device = allDevices[key];
+    if (!hasValidCoords(device) || !(device.s_time >= minTime)) continue;
+    result[key] = device;
+  }
+
+  displayDevicesCache = result;
+  return result;
 };
 
 // Обработчик переключения источников данных
 const handleSourceToggle = () => {
-  // Очищаем кэш фильтрованных устройств
-  filteredDevicesCache.value.clear();
-  
+  invalidateDevicesCache();
+
   // Обновляем счетчик узлов
   const allDevices = getAllDevices();
   const count = Object.keys(allDevices).length;
   emit("devicesCount", count, allDevices);
-  
+
   // Перерисовываем маркеры с учетом новых настроек
-  if (typeof debouncedRenderBallons === "function") {
-    debouncedRenderBallons(allDevices, false, null, null);
-  }
-};
-
-const clearGeolocationStatus = () => {
-  setTimeout(() => {
-    if (geolocationStatus.value?.type === "success") {
-      geolocationStatus.value = null;
-    }
-  }, 5000); // Очищаем успешный статус через 5 секунд
-};
-
-const filterDevicesByBounds = (devices, bounds) => {
-  if (!bounds || !devices) return [];
-
-  const cacheKey = `${bounds.getSouthWest()}-${bounds.getNorthEast()}`;
-
-  if (filteredDevicesCache.value.has(cacheKey)) {
-    return filteredDevicesCache.value.get(cacheKey);
-  }
-
-  const filtered = [];
-  const now = Date.now();
-
-  for (const index in devices) {
-    const device = devices[index];
-
-    // Проверяем наличие координат (пропускаем null, undefined и 0,0)
-    if (
-      device.latitude === null ||
-      device.latitude === undefined ||
-      device.longitude === null ||
-      device.longitude === undefined ||
-      (device.latitude === 0 && device.longitude === 0)
-    ) {
-      continue;
-    }
-
-    const deviceTime = device.s_time;
-    const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
-    if (timeDiffHours > 24) continue;
-
-    if (!isPointInBounds(device.latitude, device.longitude, bounds)) continue;
-
-    filtered.push(device);
-  }
-
-  filteredDevicesCache.value.set(cacheKey, filtered);
-
-  if (filteredDevicesCache.value.size > 10) {
-    const firstKey = filteredDevicesCache.value.keys().next().value;
-    filteredDevicesCache.value.delete(firstKey);
-  }
-
-  return filtered;
+  debouncedRenderBallons(getDisplayDevices(), false, null, null);
 };
 
 const debouncedRenderBallons = debounce(
@@ -328,10 +282,12 @@ const truncateId = (id) => {
   return id;
 };
 
-// Функция для получения longname по hex ID
-const getGatewayLongName = async (hexId) => {
-  if (!hexId) return null;
+// Кэш longname по hex ID: в одном баллуне один и тот же шлюз/узел
+// встречается многократно, а между открытиями баллунов имена почти не меняются
+const GATEWAY_NAME_TTL = 10 * 60 * 1000;
+const gatewayNameCache = new Map(); // hexId -> { promise, time }
 
+const fetchGatewayLongName = async (hexId) => {
   try {
     // Конвертируем hex ID в numeric
     const numericId = parseInt(hexId.replace("!", ""), 16);
@@ -361,9 +317,22 @@ const getGatewayLongName = async (hexId) => {
   return hexId; // Возвращаем исходный hex ID если не удалось получить longname
 };
 
+// Функция для получения longname по hex ID
+const getGatewayLongName = (hexId) => {
+  if (!hexId) return Promise.resolve(null);
+
+  const cached = gatewayNameCache.get(hexId);
+  if (cached && Date.now() - cached.time < GATEWAY_NAME_TTL) {
+    return cached.promise;
+  }
+
+  const promise = fetchGatewayLongName(hexId);
+  gatewayNameCache.set(hexId, { promise, time: Date.now() });
+  return promise;
+};
+
 // Function to open chart modal
 const openChartModal = (nodeId, deviceName) => {
-  console.log("DotsMap openChartModal:", { nodeId, deviceName });
   // Close any open balloon first
   if (map) {
     map.balloon.close();
@@ -385,8 +354,6 @@ window.openChartModal = openChartModal;
 
 // Function to show location history
 const showLocationHistory = async (nodeId, deviceName) => {
-  console.log("showLocationHistory:", { nodeId, deviceName });
-
   // Close any open balloon first
   if (map) {
     map.balloon.close();
@@ -728,8 +695,30 @@ const createBalloonContent = async (device, nodeId) => {
     `;
   }
 
+  // Запускаем все запросы сразу, а не по очереди —
+  // время открытия баллуна определяется самым медленным, а не суммой
+  const nodeInfoPromise = meshtasticApi.getNodeInfo(nodeId);
+  const positionInfoPromise = meshtasticApi.getPositionInfo(nodeId);
+  const telemetryInfoPromise = meshtasticApi.getTelemetryInfo(nodeId);
+  const textMessagesPromise = meshtasticApi.getTextMessages(nodeId);
+  const mapReportInfoPromise = meshtasticApi.getMapReportInfo(nodeId);
+  const tracerouteInfoPromise = meshtasticApi.getTracerouteInfo(nodeId);
+
+  // Как только приходит ответ — сразу запрашиваем имя его шлюза (из кэша при повторе)
+  [
+    nodeInfoPromise,
+    positionInfoPromise,
+    textMessagesPromise,
+    mapReportInfoPromise,
+  ].forEach((promise) =>
+    promise.then((info) => {
+      const gatewayId = info?.data?.[0]?.gatewayId;
+      if (gatewayId) getGatewayLongName(gatewayId);
+    })
+  );
+
   try {
-    const nodeInfo = await meshtasticApi.getNodeInfo(nodeId);
+    const nodeInfo = await nodeInfoPromise;
     if (nodeInfo && nodeInfo.data && nodeInfo.data.length > 0) {
       hasAnyData = true;
       // Берем последнюю запись (самую свежую)
@@ -825,7 +814,7 @@ const createBalloonContent = async (device, nodeId) => {
   }
 
   try {
-    const positionInfo = await meshtasticApi.getPositionInfo(nodeId);
+    const positionInfo = await positionInfoPromise;
     if (positionInfo && positionInfo.data && positionInfo.data.length > 0) {
       hasAnyData = true;
       // Берем последнюю запись (самую свежую)
@@ -917,7 +906,7 @@ const createBalloonContent = async (device, nodeId) => {
   }
 
   try {
-    const telemetryInfo = await meshtasticApi.getTelemetryInfo(nodeId);
+    const telemetryInfo = await telemetryInfoPromise;
     if (telemetryInfo && telemetryInfo.data && telemetryInfo.data.length > 0) {
       hasAnyData = true;
       // Разделяем данные по типам
@@ -1165,7 +1154,7 @@ const createBalloonContent = async (device, nodeId) => {
   }
 
   try {
-    const textMessages = await meshtasticApi.getTextMessages(nodeId);
+    const textMessages = await textMessagesPromise;
     if (textMessages && textMessages.data && textMessages.data.length > 0) {
       hasAnyData = true;
       // Берем последнее сообщение (самое свежее)
@@ -1254,7 +1243,7 @@ const createBalloonContent = async (device, nodeId) => {
   }
 
   try {
-    const mapReportInfo = await meshtasticApi.getMapReportInfo(nodeId);
+    const mapReportInfo = await mapReportInfoPromise;
     if (mapReportInfo && mapReportInfo.data && mapReportInfo.data.length > 0) {
       hasAnyData = true;
       // Берем последний отчет (самый свежий)
@@ -1367,7 +1356,7 @@ const createBalloonContent = async (device, nodeId) => {
 
   // Загружаем данные traceroute
   try {
-    const tracerouteInfo = await meshtasticApi.getTracerouteInfo(nodeId);
+    const tracerouteInfo = await tracerouteInfoPromise;
     if (
       tracerouteInfo &&
       tracerouteInfo.data &&
@@ -1377,6 +1366,18 @@ const createBalloonContent = async (device, nodeId) => {
       // Берем последнюю запись (самую свежую)
       const latestTrace = tracerouteInfo.data[0];
       const rawData = latestTrace.rawData;
+
+      // Заранее параллельно запрашиваем имена всех узлов маршрута —
+      // ниже они берутся из кэша getGatewayLongName
+      [
+        latestTrace.from,
+        latestTrace.to,
+        ...(rawData?.route || []),
+        ...(rawData?.route_back || []),
+      ]
+        .filter((id) => id !== undefined && id !== null)
+        .forEach((id) => getGatewayLongName(`!${id.toString(16)}`));
+      if (latestTrace.gatewayId) getGatewayLongName(latestTrace.gatewayId);
 
       // Получаем информацию о целевом узле для отображения longName
       let targetNodeLongName = null;
@@ -1700,32 +1701,6 @@ const createBalloonContent = async (device, nodeId) => {
   `;
 };
 
-const renderPath = async (nodeId) => {
-  if (!nodeId) return;
-
-  try {
-    const gpsData = await meshtasticApi.getGpsTrack(nodeId);
-
-    if (!gpsData || !gpsData.length) return;
-
-    const polyline = new ymaps.Polyline(
-      gpsData.map(({ latitudeI, longitudeI }) => [
-        latitudeI / 10000,
-        longitudeI / 10000,
-      ]),
-      {},
-      {
-        strokeColor: MAP_CONFIG.PATH_STROKE_COLOR,
-        strokeWidth: MAP_CONFIG.PATH_STROKE_WIDTH,
-      }
-    );
-
-    map.geoObjects.add(polyline);
-  } catch (error) {
-    // Ошибка отображения пути - продолжаем работу
-  }
-};
-
 const renderBallons = (
   devices,
   isUpdate = false,
@@ -1807,87 +1782,21 @@ const renderBallons = (
     const placemarks = [];
     const state = map.action.getCurrentState();
     const now = Date.now();
+    const bounds = map.getBounds();
 
-    let filteredByTime = 0;
-    let filteredByBounds = 0;
-    let filteredByCoords = 0;
-    let filteredByIcon = 0;
-    let meshcoreCount = 0;
-    let meshtasticCount = 0;
-    let meshcoreFilteredByCoords = 0;
-    let meshcoreFilteredByTime = 0;
-    let meshcoreFilteredByBounds = 0;
-    let meshcoreFilteredByIcon = 0;
-    let meshcorePassed = 0;
-    let totalDevices = Object.keys(devices).length;
-
-    // Собираем все meshcore устройства для отладки
-    const meshcoreDevicesInLoop = [];
-    
     for (const index in devices) {
       const device = devices[index];
       const nodeId = device.device_id || device.hex_id || device.id || index;
-      const isMeshcoreDevice = device.isMeshcore === true;
-
-      // Подсчитываем устройства по источникам
-      if (isMeshcoreDevice) {
-        meshcoreCount++;
-        meshcoreDevicesInLoop.push({
-          id: nodeId,
-          name: device.longName || device.name || nodeId,
-          lat: device.latitude,
-          lon: device.longitude,
-          time: device.s_time,
-          age_hours: ((now - device.s_time) / (1000 * 60 * 60)).toFixed(1),
-          step: 'начало',
-        });
-      } else {
-        meshtasticCount++;
-      }
 
       // Проверяем наличие координат (пропускаем null, undefined и 0,0)
-      if (
-        device.latitude === null ||
-        device.latitude === undefined ||
-        device.longitude === null ||
-        device.longitude === undefined ||
-        (device.latitude === 0 && device.longitude === 0)
-      ) {
-        filteredByCoords++;
-        if (isMeshcoreDevice) {
-          meshcoreFilteredByCoords++;
-          const lastDevice = meshcoreDevicesInLoop[meshcoreDevicesInLoop.length - 1];
-          if (lastDevice) lastDevice.step = 'отфильтровано: координаты';
-        }
-        continue;
-      }
+      if (!hasValidCoords(device)) continue;
 
-      const deviceTime = device.s_time;
-      const timeDiffHours = (now - deviceTime) / (1000 * 60 * 60);
-
-      if (timeDiffHours > 24) {
-        filteredByTime++;
-        if (isMeshcoreDevice) {
-          meshcoreFilteredByTime++;
-          const lastDevice = meshcoreDevicesInLoop.find(d => d.id === nodeId);
-          if (lastDevice) lastDevice.step = 'отфильтровано: время > 24ч';
-        }
-        continue;
-      }
-
-      const bounds = map.getBounds();
+      const timeDiffHours = (now - device.s_time) / (1000 * 60 * 60);
+      if (timeDiffHours > 24) continue;
 
       // Всегда фильтруем устройства по границам карты для оптимизации
-      if (bounds) {
-        if (!isPointInBounds(device.latitude, device.longitude, bounds)) {
-          filteredByBounds++;
-          if (isMeshcoreDevice) {
-            meshcoreFilteredByBounds++;
-            const lastDevice = meshcoreDevicesInLoop.find(d => d.id === nodeId);
-            if (lastDevice) lastDevice.step = 'отфильтровано: вне границ карты';
-          }
-          continue;
-        }
+      if (bounds && !isPointInBounds(device.latitude, device.longitude, bounds)) {
+        continue;
       }
 
       let presetcolor;
@@ -1920,22 +1829,7 @@ const renderBallons = (
       }
       
       // Если iconOptions пустой, пропускаем устройство
-      if (!iconOptions.preset) {
-        filteredByIcon++;
-        if (isMeshcoreDevice) {
-          meshcoreFilteredByIcon++;
-          const lastDevice = meshcoreDevicesInLoop.find(d => d.id === nodeId);
-          if (lastDevice) lastDevice.step = 'отфильтровано: нет iconOptions';
-        }
-        continue;
-      }
-      
-      // Подсчитываем прошедшие фильтрацию meshcore устройства
-      if (isMeshcoreDevice) {
-        meshcorePassed++;
-        const lastDevice = meshcoreDevicesInLoop.find(d => d.id === nodeId);
-        if (lastDevice) lastDevice.step = '✅ ПРОШЛО ВСЕ ФИЛЬТРЫ';
-      }
+      if (!iconOptions.preset) continue;
 
       const timestampfooter = formatTime(device.s_time);
 
@@ -1968,7 +1862,6 @@ const renderBallons = (
         const nodeId =
           event.originalEvent.currentTarget.properties._data.nodeId;
         openedNodeId = nodeId;
-        renderPath(openedNodeId);
 
         // Загружаем полное содержимое баллуна
         try {
@@ -2025,32 +1918,6 @@ const renderBallons = (
       });
 
       pointsOnMap.value = placemarks.length;
-      
-      // Логирование для отладки
-      console.log(`📊 Статистика фильтрации устройств:`, {
-        всего: totalDevices,
-        meshtastic: meshtasticCount,
-        meshcore: {
-          всего: meshcoreCount,
-          отфильтровано_координаты: meshcoreFilteredByCoords,
-          отфильтровано_время: meshcoreFilteredByTime,
-          отфильтровано_границы: meshcoreFilteredByBounds,
-          отфильтровано_иконка: meshcoreFilteredByIcon,
-          прошло_фильтрацию: meshcorePassed,
-        },
-        отфильтровано_координаты: filteredByCoords,
-        отфильтровано_время: filteredByTime,
-        отфильтровано_границы: filteredByBounds,
-        отфильтровано_иконка: filteredByIcon,
-        отображено: placemarks.length,
-      });
-      
-      // Детальный лог по каждому meshcore устройству
-      if (meshcoreDevicesInLoop.length > 0) {
-        console.log(`🔍 Детализация по meshcore устройствам:`);
-        console.table(meshcoreDevicesInLoop);
-      }
-      
       return;
     }
 
@@ -2101,32 +1968,6 @@ const renderBallons = (
     // Для кластеризации считаем количество кластеров, а не маркеров
     const clusters = clusterer.getClusters();
     pointsOnMap.value = clusters.length;
-    
-    // Логирование для отладки
-    console.log(`📊 Статистика фильтрации устройств (кластеры):`, {
-      всего: totalDevices,
-      meshtastic: meshtasticCount,
-      meshcore: {
-        всего: meshcoreCount,
-        отфильтровано_координаты: meshcoreFilteredByCoords,
-        отфильтровано_время: meshcoreFilteredByTime,
-        отфильтровано_границы: meshcoreFilteredByBounds,
-        отфильтровано_иконка: meshcoreFilteredByIcon,
-        прошло_фильтрацию: meshcorePassed,
-      },
-      отфильтровано_координаты: filteredByCoords,
-      отфильтровано_время: filteredByTime,
-      отфильтровано_границы: filteredByBounds,
-      отфильтровано_иконка: filteredByIcon,
-      кластеров: clusters.length,
-      маркеров: placemarks.length,
-    });
-    
-    // Детальный лог по каждому meshcore устройству (кластеры)
-    if (meshcoreDevicesInLoop.length > 0) {
-      console.log(`🔍 Детализация по meshcore устройствам (режим кластеризации):`);
-      console.table(meshcoreDevicesInLoop);
-    }
   } catch (error) {
     console.error("❌ Ошибка в renderBallons:", error);
     pointsOnMap.value = 0;
@@ -2147,23 +1988,9 @@ const fetchMeshcoreData = async () => {
     if (data && data.data) {
       // Преобразуем данные meshcore в формат, совместимый с обычными устройствами
       const normalizedMeshcore = {};
-      let totalMeshcore = 0;
-      let withCoords = 0;
-      let withoutCoords = 0;
-      
+
       for (const deviceId in data.data) {
         const device = data.data[deviceId];
-        totalMeshcore++;
-        
-        // Проверяем наличие координат
-        if (device.lat !== null && device.lat !== undefined && 
-            device.lon !== null && device.lon !== undefined &&
-            !(device.lat === 0 && device.lon === 0)) {
-          withCoords++;
-        } else {
-          withoutCoords++;
-        }
-        
         normalizedMeshcore[deviceId] = {
           device_id: device.device_id,
           hex_id: device.device_id,
@@ -2179,13 +2006,7 @@ const fetchMeshcoreData = async () => {
           gateway_origin_id: device.gateway_origin_id, // ID шлюза для ссылки
         };
       }
-      
-      console.log(`📊 Meshcore данные загружены:`, {
-        всего: totalMeshcore,
-        с_координатами: withCoords,
-        без_координат: withoutCoords,
-      });
-      
+
       meshcoreDevices.value = normalizedMeshcore;
     } else {
       meshcoreDevices.value = {};
@@ -2197,97 +2018,83 @@ const fetchMeshcoreData = async () => {
   }
 };
 
-const fetchDevicesData = async () => {
-  try {
-    const response = await fetch("https://meshtasticback.taubetele.com/dots");
-    if (!response.ok) {
-      if (response.status === 502) {
-        throw new Error(
-          "Сервер временно недоступен (502 Bad Gateway). Попробуйте позже."
-        );
-      } else if (response.status >= 500) {
-        throw new Error(
-          `Ошибка сервера (${response.status}). Попробуйте позже.`
-        );
-      } else if (response.status >= 400) {
-        throw new Error(
-          `Ошибка запроса (${response.status}). Проверьте настройки.`
-        );
-      }
+const DOTS_URL = "https://meshtasticback.taubetele.com/dots";
+const UPDATE_INTERVAL_MS = 60000;
+
+const fetchMainDevices = async () => {
+  const response = await fetch(DOTS_URL);
+  if (!response.ok) {
+    if (response.status === 502) {
+      throw new Error(
+        "Сервер временно недоступен (502 Bad Gateway). Попробуйте позже."
+      );
+    } else if (response.status >= 500) {
+      throw new Error(`Ошибка сервера (${response.status}). Попробуйте позже.`);
+    } else if (response.status >= 400) {
+      throw new Error(
+        `Ошибка запроса (${response.status}). Проверьте настройки.`
+      );
     }
-
-    const data = await response.json();
-
-    if (data && data.data) {
-      devices.value = data.data;
-      const count = Object.keys(data.data).length;
-      emit("devicesCount", count, data.data);
-
-      // Загружаем meshcore данные параллельно
-      await fetchMeshcoreData();
-
-      // Объединяем данные для отображения
-      const allDevices = getAllDevices();
-      if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(allDevices, false, null, null);
-      }
-    } else {
-      devices.value = {};
-      emit("devicesCount", 0, {});
-
-      // Загружаем meshcore данные даже если обычные данные пусты
-      await fetchMeshcoreData();
-      const allDevices = getAllDevices();
-      if (typeof debouncedRenderBallons === "function") {
-        debouncedRenderBallons(allDevices, false, null, null);
-      }
-    }
-  } catch (error) {
-    console.error("❌ Ошибка загрузки данных устройств:", error);
-
-    // Показываем пользователю понятное сообщение об ошибке
-    if (error.message.includes("Failed to fetch")) {
-      geolocationStatus.value = {
-        type: "error",
-        message:
-          "❌ Не удается подключиться к серверу. Проверьте интернет-соединение или попробуйте позже.",
-      };
-    } else {
-      geolocationStatus.value = {
-        type: "error",
-        message: `❌ ${error.message}`,
-      };
-    }
-
-    devices.value = {};
-    emit("devicesCount", 0, {});
-
-    // Пытаемся загрузить meshcore данные даже при ошибке обычных данных
-    await fetchMeshcoreData();
-    const allDevices = getAllDevices();
-    if (typeof debouncedRenderBallons === "function") {
-      debouncedRenderBallons(allDevices, false, null, null);
-    }
-
-    // Автоматически скрываем ошибку через 10 секунд
-    setTimeout(() => {
-      if (geolocationStatus.value?.type === "error") {
-        geolocationStatus.value = null;
-      }
-    }, 10000);
   }
+
+  const data = await response.json();
+  const newDevices = data?.data || {};
+  devices.value = newDevices;
+  emit("devicesCount", Object.keys(newDevices).length, newDevices);
+};
+
+// Загружает meshtastic и meshcore параллельно. Рендер — на стороне вызывающего.
+// showErrors=false (автообновление): при ошибке оставляем прежние данные молча.
+const fetchDevicesData = async ({ showErrors = true } = {}) => {
+  const [mainResult] = await Promise.allSettled([
+    fetchMainDevices(),
+    fetchMeshcoreData(),
+  ]);
+  invalidateDevicesCache();
+
+  if (mainResult.status === "fulfilled") return;
+
+  const error = mainResult.reason;
+  console.error("❌ Ошибка загрузки данных устройств:", error);
+  if (!showErrors) return;
+
+  // Показываем пользователю понятное сообщение об ошибке
+  if (error.message.includes("Failed to fetch")) {
+    geolocationStatus.value = {
+      type: "error",
+      message:
+        "❌ Не удается подключиться к серверу. Проверьте интернет-соединение или попробуйте позже.",
+    };
+  } else {
+    geolocationStatus.value = {
+      type: "error",
+      message: `❌ ${error.message}`,
+    };
+  }
+
+  devices.value = {};
+  emit("devicesCount", 0, {});
+
+  // Автоматически скрываем ошибку через 10 секунд
+  setTimeout(() => {
+    if (geolocationStatus.value?.type === "error") {
+      geolocationStatus.value = null;
+    }
+  }, 10000);
 };
 
 let updateInterval = null;
+let lastUpdateTime = 0;
+let isUpdating = false;
+const isAutoUpdateActive = ref(false);
 
 const startDataUpdates = () => {
   if (updateInterval) {
     clearInterval(updateInterval);
   }
 
-  updateInterval = setInterval(async () => {
-    await updateDevicesData();
-  }, 60000);
+  updateInterval = setInterval(updateDevicesData, UPDATE_INTERVAL_MS);
+  isAutoUpdateActive.value = true;
 };
 
 const stopDataUpdates = () => {
@@ -2295,6 +2102,23 @@ const stopDataUpdates = () => {
     clearInterval(updateInterval);
     updateInterval = null;
   }
+  isAutoUpdateActive.value = false;
+};
+
+// Пока вкладка скрыта — не качаем данные. При возврате обновляем сразу,
+// если с прошлого обновления прошло больше интервала.
+const handleVisibilityChange = () => {
+  if (!map) return;
+
+  if (document.hidden) {
+    stopDataUpdates();
+    return;
+  }
+
+  if (Date.now() - lastUpdateTime >= UPDATE_INTERVAL_MS) {
+    updateDevicesData();
+  }
+  startDataUpdates();
 };
 
 const clearDeviceMarkers = () => {
@@ -2332,33 +2156,21 @@ const clearDeviceMarkers = () => {
 };
 
 const updateDevicesData = async () => {
+  // Ответ большой — не запускаем новый запрос, пока не завершился предыдущий
+  if (isUpdating) return;
+  isUpdating = true;
+  lastUpdateTime = Date.now();
+
   try {
-    const response = await fetch("https://meshtasticback.taubetele.com/dots");
-    const data = await response.json();
-
-    if (data && data.data) {
-      devices.value = data.data;
-      const count = Object.keys(data.data).length;
-      emit("devicesCount", count, data.data);
-    }
-
-    // Обновляем meshcore данные параллельно
-    await fetchMeshcoreData();
-
-    // Объединяем данные для отображения
-    const allDevices = getAllDevices();
-    if (typeof debouncedRenderBallons === "function") {
-      debouncedRenderBallons(allDevices, true, null, null);
-    }
-  } catch (error) {
-    console.error("❌ Ошибка обновления данных устройств:", error);
-    // Пытаемся обновить meshcore данные даже при ошибке обычных данных
-    await fetchMeshcoreData();
-    const allDevices = getAllDevices();
-    if (typeof debouncedRenderBallons === "function") {
-      debouncedRenderBallons(allDevices, true, null, null);
-    }
+    await fetchDevicesData({ showErrors: false });
+  } finally {
+    isUpdating = false;
   }
+
+  // Пока показана история перемещений, маркеры устройств не возвращаем
+  if (isLocationHistoryActive.value) return;
+
+  debouncedRenderBallons(getDisplayDevices(), true, null, null);
 };
 
 onMounted(async () => {
@@ -2375,10 +2187,13 @@ onMounted(async () => {
     return;
   }
 
-  startDataUpdates();
+  // Данные (несколько МБ) начинаем качать сразу, параллельно с загрузкой
+  // Yandex Maps API, а не после инициализации карты
+  const initialDataPromise = fetchDevicesData();
 
   onUnmounted(() => {
     stopDataUpdates();
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
     // Очищаем глобальные функции фокусировки
     if (window.focusOnDevice) {
       delete window.focusOnDevice;
@@ -2589,8 +2404,6 @@ onMounted(async () => {
         targetPlacemark.balloon.open(undefined, undefined, {
           balloonAutoPan: false,
         });
-
-        console.log("Баллун открыт для устройства:", nodeId);
       } else {
         console.warn("Маркер устройства не найден на карте:", nodeId);
         // Показываем сообщение пользователю
@@ -2672,8 +2485,6 @@ onMounted(async () => {
         setTimeout(() => {
           openDeviceBalloon(coordinates);
         }, 500);
-
-        console.log("Фокусировка на устройстве по hex ID:", hexId);
       } else {
         console.warn(
           "Устройство с hex ID не найдено или нет координат:",
@@ -2746,11 +2557,8 @@ onMounted(async () => {
       }
     }
 
-    // Очищаем кэш фильтрованных устройств для новых границ
-    filteredDevicesCache.value.clear();
-
-    // Объединяем обычные устройства и meshcore устройства
-    const allDevices = getAllDevices();
+    // Только устройства с координатами и активностью за 24 часа
+    const allDevices = getDisplayDevices();
 
     // Проверяем, что данные загружены и не пустые
     if (!allDevices || Object.keys(allDevices).length === 0) {
@@ -2929,19 +2737,11 @@ onMounted(async () => {
 
     // Центрируем карту на геолокации только если нет координат в URL
     renderSelfBallon(!hasUrlPosition);
-    await fetchDevicesData();
+    await initialDataPromise;
+    lastUpdateTime = Date.now();
 
-    // Добавляем небольшую задержку для инициализации карты
-    setTimeout(() => {
-      // Объединяем обычные устройства и meshcore устройства
-      const allDevices = getAllDevices();
-      debouncedRenderBallons(allDevices, false, null, null);
-
-      // Вызываем onBoundsChange только после загрузки данных об устройствах
-      if (allDevices && Object.keys(allDevices).length > 0) {
-        onBoundsChange();
-      }
-    }, 100);
+    // Один рендер после загрузки данных
+    onBoundsChange();
 
     // Слушаем событие фокусировки на устройстве
     emit("focusOnDevice", focusOnDevice);
@@ -2950,30 +2750,8 @@ onMounted(async () => {
     window.focusOnDevice = focusOnDevice;
     window.focusOnDeviceByHex = focusOnDeviceByHex;
 
-    watch(devices, (newDevices) => {
-      map.geoObjects?.removeAll();
-      pointsOnMap.value = 0;
-      filteredDevicesCache.value.clear();
-      renderSelfBallon(false);
-      // Объединяем обычные устройства и meshcore устройства
-      const allDevices = getAllDevices();
-      debouncedRenderBallons(allDevices, false, null, null);
-      renderPath(openedNodeId);
-
-      // Вызываем onBoundsChange при изменении данных об устройствах
-      if (allDevices && Object.keys(allDevices).length > 0) {
-        setTimeout(() => {
-          onBoundsChange();
-        }, 150);
-      }
-    });
-
-    // Также отслеживаем изменения meshcore устройств
-    watch(meshcoreDevices, () => {
-      // Объединяем обычные устройства и meshcore устройства
-      const allDevices = getAllDevices();
-      debouncedRenderBallons(allDevices, false, null, null);
-    });
+    startDataUpdates();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
   };
 
   if (window.ymaps) {
