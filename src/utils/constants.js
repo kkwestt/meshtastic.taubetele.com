@@ -12,7 +12,10 @@ export const MAP_PRESETS = {
   MQTT: "islands#darkGreenStretchyIcon",
   OFFLINE: "islands#greyStretchyIcon",
   INACTIVE: "islands#greyStretchyIcon",
+  // Meshcore по давности последнего эфира: в сети / недавно / был давно
   MESHCORE: "islands#orangeStretchyIcon",
+  MESHCORE_RECENT: "islands#yellowStretchyIcon",
+  MESHCORE_STALE: "islands#greyStretchyIcon",
   CLUSTER: "islands#blueClusterIcons",
   GEOLOCATION: "islands#redCircleIcon",
   HISTORY: "islands#orangeDotIcon",

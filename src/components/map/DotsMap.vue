@@ -99,7 +99,12 @@ import {
   REGIONS,
   ICONS,
 } from "../../utils/constants.js";
-import { debounce, isPointInBounds } from "../../utils/helpers.js";
+import {
+  debounce,
+  isPointInBounds,
+  escapeHtml,
+  escapeJsAttr,
+} from "../../utils/helpers.js";
 import { meshtasticApi } from "../../utils/api.js";
 
 // Chart.js тяжёлый — грузим модалку с графиками только при открытии
@@ -147,6 +152,27 @@ const invalidateDevicesCache = () => {
   displayDevicesCache = null;
 };
 
+const HOUR_MS = 60 * 60 * 1000;
+// Meshtastic показываем за сутки. Meshcore — за неделю: иначе узел,
+// который давно не выходил в эфир, просто пропал бы с карты, а не стал серым.
+const MAX_AGE_MS = 24 * HOUR_MS;
+const MESHCORE_MAX_AGE_MS = 7 * 24 * HOUR_MS;
+// Meshcore: до 2 ч — в сети, до 24 ч — недавно, дальше — был давно
+const MESHCORE_ONLINE_MS = 2 * HOUR_MS;
+const MESHCORE_RECENT_MS = 24 * HOUR_MS;
+
+const maxAgeFor = (device) =>
+  device.isMeshcore ? MESHCORE_MAX_AGE_MS : MAX_AGE_MS;
+
+// Так компонент Home Assistant (meshcore_chat) помечает свои точки
+const HA_GATEWAY_ID = "home_assistant";
+
+const meshcorePreset = (ageMs) => {
+  if (ageMs < MESHCORE_ONLINE_MS) return MAP_PRESETS.MESHCORE;
+  if (ageMs < MESHCORE_RECENT_MS) return MAP_PRESETS.MESHCORE_RECENT;
+  return MAP_PRESETS.MESHCORE_STALE;
+};
+
 const hasValidCoords = (device) =>
   device.latitude !== null &&
   device.latitude !== undefined &&
@@ -178,7 +204,7 @@ const getAllDevices = () => {
 };
 
 // Только устройства, которые в принципе могут попасть на карту:
-// есть координаты и активность за последние 24 часа.
+// есть координаты и активность за последние 24 часа (meshcore — 7 дней).
 // Обычно это несколько процентов от общего списка, поэтому
 // перерисовка при сдвиге карты проходит по гораздо меньшему набору.
 const getDisplayDevices = () => {
@@ -186,11 +212,12 @@ const getDisplayDevices = () => {
 
   const allDevices = getAllDevices();
   const result = {};
-  const minTime = Date.now() - 24 * 60 * 60 * 1000;
+  const now = Date.now();
 
   for (const key in allDevices) {
     const device = allDevices[key];
-    if (!hasValidCoords(device) || !(device.s_time >= minTime)) continue;
+    if (!hasValidCoords(device) || !(device.s_time >= now - maxAgeFor(device)))
+      continue;
     result[key] = device;
   }
 
@@ -303,18 +330,21 @@ const fetchGatewayLongName = async (hexId) => {
         // Берем последнюю запись (первую в массиве, так как они отсортированы по времени)
         const latestNodeInfo = data.data[0];
         // Ищем long_name в rawData
+        // Результат вставляется только в HTML балунов — сразу экранируем
         if (latestNodeInfo.rawData && latestNodeInfo.rawData.long_name) {
-          return latestNodeInfo.rawData.long_name;
+          return escapeHtml(latestNodeInfo.rawData.long_name);
         }
         // Fallback к другим полям
-        return latestNodeInfo.longName || latestNodeInfo.long_name || hexId;
+        return escapeHtml(
+          latestNodeInfo.longName || latestNodeInfo.long_name || hexId
+        );
       }
     }
   } catch (error) {
     console.warn("Ошибка получения longname для gateway:", hexId, error);
   }
 
-  return hexId; // Возвращаем исходный hex ID если не удалось получить longname
+  return escapeHtml(hexId); // Исходный hex ID, если не удалось получить longname
 };
 
 // Функция для получения longname по hex ID
@@ -470,10 +500,10 @@ const showLocationHistory = async (nodeId, deviceName) => {
       const placemark = new ymaps.Placemark(
         coords,
         {
-          balloonContentHeader: `${deviceName} - ${label || "История"}`,
+          balloonContentHeader: `${escapeHtml(deviceName)} - ${label || "История"}`,
           balloonContentBody: `
             <div style="font-size: 12px;">
-              <div style="margin-bottom: 4px;"><strong>Устройство:</strong> ${deviceName}</div>
+              <div style="margin-bottom: 4px;"><strong>Устройство:</strong> ${escapeHtml(deviceName)}</div>
               <div style="margin-bottom: 4px;"><strong>Время:</strong> ${timestamp}</div>
               <div style="margin-bottom: 4px;"><strong>Координаты:</strong> ${coords[0].toFixed(
                 4
@@ -636,50 +666,62 @@ const createBalloonContent = async (device, nodeId) => {
   if (device.isMeshcore) {
     hasAnyData = true;
     
-    // Данные о геолокации с ссылкой
-    if (device.latitude && device.longitude) {
-      const lat = device.latitude;
-      const lon = device.longitude;
-      const googleMapsLink = `https://www.google.com/maps?q=${lat},${lon}`;
+    // Когда узел последний раз был в эфире и что это значит для карты
+    const ageMs = Date.now() - Number(device.s_time);
+    const airStatus =
+      ageMs < MESHCORE_ONLINE_MS
+        ? "в сети"
+        : ageMs < MESHCORE_RECENT_MS
+        ? "недавно"
+        : "был давно";
+
+    // Координаты со ссылкой. Время позиции не знаем — только время эфира,
+    // поэтому оно вынесено в отдельную строку, а не в заголовок координат.
+    let coordsHtml = "";
+    if (hasValidCoords(device)) {
+      const lat = Number(device.latitude);
+      const lon = Number(device.longitude);
       const yandexMapsLink = `https://yandex.ru/maps/?pt=${lon},${lat}&z=15`;
-      
-      positionInfoHtml = `
-    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
-    <div style="font-weight: bold; margin-bottom: 2px;">Данные о позиции: ${formatTime(device.s_time)}</div>
-    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
-    <span>Координаты:</span><span>
+      coordsHtml = `<span>Координаты:</span><span>
       <a href="${yandexMapsLink}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none; cursor: pointer;">${lat.toFixed(4)}, ${lon.toFixed(4)}</a>
-    </span>
+    </span>`;
+    }
+
+    positionInfoHtml = `
+    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
+    <span>Был в эфире:</span><span>${formatTime(device.s_time)} (${airStatus})</span>
+    ${coordsHtml}
     </div>
     </div>
     `;
-    }
 
     // Информация об устройстве MESHCORE
+    const deviceId = device.device_id ? escapeHtml(device.device_id) : "";
     nodeInfoHtml = `
     <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
-    ${device.name ? `<span>Имя:</span><span>${device.name}</span>` : ""}
-    ${device.device_id ? `<span>ID:</span><span title="${device.device_id}">${truncateId(device.device_id)}</span>` : ""}
+    ${device.name ? `<span>Имя:</span><span>${escapeHtml(device.name)}</span>` : ""}
+    ${deviceId ? `<span>ID:</span><span title="${deviceId}">${escapeHtml(truncateId(String(device.device_id)))}</span>` : ""}
     </div>
     </div>
     `;
 
-    // Информация о шлюзе (Gateway) с ссылкой для фокусировки
+    // Gateway — только для узлов, услышанных MQTT-шлюзом. Точки от Home
+    // Assistant приходят с gateway_origin_id = "home_assistant": шлюза у них нет.
+    // ID шлюза meshcore — его public key, а не meshtastic-ID, поэтому
+    // имя не ищем через NODEINFO, а ссылка фокусирует на meshcore-точке шлюза.
     let gatewayInfoHtml = "";
-    if (device.gateway_origin_id) {
-      // Добавляем префикс "!" если его нет для корректной обработки hex ID
-      const gatewayHexId = device.gateway_origin_id.startsWith("!") 
-        ? device.gateway_origin_id 
-        : `!${device.gateway_origin_id}`;
-      const gatewayLongName = await getGatewayLongName(gatewayHexId);
-      
+    const gatewayId = device.gateway_origin_id
+      ? String(device.gateway_origin_id)
+      : "";
+    if (gatewayId && gatewayId !== HA_GATEWAY_ID) {
       gatewayInfoHtml = `
     <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
     <div style="font-weight: bold; margin-bottom: 2px;">Gateway</div>
     <div style="display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 11px; line-height: 1.2;">
-    ${device.gateway_origin ? `<span>Имя:</span><span>${device.gateway_origin}</span>` : ""}
-    ${device.gateway_origin_id ? `<span>ID:</span><span><a href="#" onclick="focusOnDeviceByHex('${gatewayHexId}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;" title="${gatewayHexId}">${truncateId(gatewayHexId)}</a></span>` : ""}
+    ${device.gateway_origin ? `<span>Имя:</span><span>${escapeHtml(device.gateway_origin)}</span>` : ""}
+    <span>ID:</span><span><a href="#" onclick="focusOnDeviceByHex('${escapeJsAttr(gatewayId)}'); return false;" style="color: #3b82f6; text-decoration: none; cursor: pointer;" title="${escapeHtml(gatewayId)}">${escapeHtml(truncateId(gatewayId))}</a></span>
     </div>
     </div>
     `;
@@ -1390,7 +1432,7 @@ const createBalloonContent = async (device, nodeId) => {
           targetNodeInfo.data &&
           targetNodeInfo.data.length > 0
         ) {
-          targetNodeLongName = targetNodeInfo.data[0].longName;
+          targetNodeLongName = escapeHtml(targetNodeInfo.data[0].longName);
         }
       } catch (error) {
         // Если не удалось получить информацию о целевом узле, используем hex ID
@@ -1635,9 +1677,9 @@ const createBalloonContent = async (device, nodeId) => {
       hasAnyData
         ? `<div style="margin-bottom: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
         <button 
-          onclick="window.openChartModal('${nodeId}', '${
+          onclick="window.openChartModal('${escapeJsAttr(nodeId)}', '${escapeJsAttr(
             device.longName || device.shortName || nodeId
-          }'); return false;" 
+          )}'); return false;" 
           style="
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -1662,9 +1704,9 @@ const createBalloonContent = async (device, nodeId) => {
           <span>Графики данных</span>
         </button>
         <button 
-          onclick="window.showLocationHistory('${nodeId}', '${
+          onclick="window.showLocationHistory('${escapeJsAttr(nodeId)}', '${escapeJsAttr(
             device.longName || device.shortName || nodeId
-          }'); return false;" 
+          )}'); return false;" 
           style="
             background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
             color: white;
@@ -1791,8 +1833,9 @@ const renderBallons = (
       // Проверяем наличие координат (пропускаем null, undefined и 0,0)
       if (!hasValidCoords(device)) continue;
 
-      const timeDiffHours = (now - device.s_time) / (1000 * 60 * 60);
-      if (timeDiffHours > 24) continue;
+      const ageMs = now - device.s_time;
+      if (ageMs > maxAgeFor(device)) continue;
+      const timeDiffHours = ageMs / HOUR_MS;
 
       // Всегда фильтруем устройства по границам карты для оптимизации
       if (bounds && !isPointInBounds(device.latitude, device.longitude, bounds)) {
@@ -1802,9 +1845,9 @@ const renderBallons = (
       let presetcolor;
       let iconOptions = {};
 
-      // Meshcore устройства всегда отображаются красным цветом
+      // Meshcore раскрашиваем по давности последнего эфира
       if (device.isMeshcore) {
-        presetcolor = MAP_PRESETS.MESHCORE;
+        presetcolor = meshcorePreset(ageMs);
         iconOptions = {
           preset: `${presetcolor}`,
         };
@@ -1834,14 +1877,16 @@ const renderBallons = (
       const timestampfooter = formatTime(device.s_time);
 
       // Формируем заголовок баллуна - не дублируем имя, если longName и shortName одинаковые
-      const balloonHeader = device.longName === device.shortName 
-        ? device.longName 
-        : `${device.longName} (${device.shortName})`;
+      const balloonHeader = escapeHtml(
+        device.longName === device.shortName
+          ? device.longName
+          : `${device.longName} (${device.shortName})`
+      );
 
       const placemark = new window.ymaps.Placemark(
         [device.latitude, device.longitude],
         {
-          iconContent: device.shortName,
+          iconContent: escapeHtml(device.shortName),
           balloonContentHeader: balloonHeader,
           balloonContentBody: `
     <div style="max-width: 350px; font-size: 12px;">
@@ -1850,9 +1895,9 @@ const renderBallons = (
     </div>
     `,
           balloonContentFooter: `Updated: ${timestampfooter}`,
-          clusterCaption: `Node: <strong>${
+          clusterCaption: `Node: <strong>${escapeHtml(
             device.shortName || device.short_name || nodeId
-          }</strong>`,
+          )}</strong>`,
           nodeId,
         },
         iconOptions
@@ -1996,9 +2041,11 @@ const fetchMeshcoreData = async () => {
           hex_id: device.device_id,
           latitude: device.lat,
           longitude: device.lon,
-          longName: device.name || device.device_id,
-          shortName: device.name || device.device_id,
-          name: device.name, // Сохраняем оригинальное имя
+          // Имя может прийти числом (бэкенд парсит поля как JSON).
+          // Без имени — короткий ID, а не все 64 символа ключа
+          longName: device.name ? String(device.name) : truncateId(String(device.device_id)),
+          shortName: device.name ? String(device.name) : truncateId(String(device.device_id)),
+          name: device.name ? String(device.name) : "", // Сохраняем оригинальное имя
           s_time: device.s_time,
           mqtt: "0", // meshcore устройства не являются MQTT
           isMeshcore: true, // Флаг для идентификации meshcore устройств
@@ -2459,7 +2506,7 @@ onMounted(async () => {
             device.hex_id === hexId ||
             device.id === numericId ||
             deviceKey === numericId.toString() ||
-            deviceKey === hexId
+            deviceKey.toUpperCase() === hexId.replace("!", "").toUpperCase()
           ) {
             targetDevice = device;
             targetDeviceKey = deviceKey;

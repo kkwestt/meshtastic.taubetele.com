@@ -209,3 +209,37 @@ export function getLatestDeviceTimestamp(device) {
 
   return timestamps.length > 0 ? Math.max(...timestamps) : null;
 }
+
+const HTML_ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/**
+ * Экранирует строку для вставки в HTML (балуны, подписи меток).
+ * Имена узлов задаёт кто угодно в эфире, поэтому вставлять их как есть нельзя.
+ */
+export function escapeHtml(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/[&<>"']/g, (char) => HTML_ESCAPES[char]);
+}
+
+/**
+ * Готовит строку для JS-литерала в одинарных кавычках внутри HTML-атрибута:
+ * onclick="fn('${escapeJsAttr(name)}')". Сначала экранирование для JS,
+ * затем для HTML — браузер снимает их в обратном порядке.
+ */
+export function escapeJsAttr(value) {
+  if (value === null || value === undefined) return "";
+  const js = String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+  return escapeHtml(js);
+}
