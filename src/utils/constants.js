@@ -1,7 +1,8 @@
 export const MAP_CONFIG = {
   DEFAULT_CENTER: [55.76, 37.64],
   DEFAULT_ZOOM: 9,
-  MIN_ZOOM_FOR_INDIVIDUAL_MARKERS: 8,
+  // До этого зума включительно точки собираются в кластеры, дальше — по одной
+  MIN_ZOOM_FOR_INDIVIDUAL_MARKERS: 10,
   CLUSTER_GRID_SIZE: 100,
   PATH_STROKE_COLOR: "#000099",
   PATH_STROKE_WIDTH: 3,
