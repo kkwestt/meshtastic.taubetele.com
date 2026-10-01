@@ -1,7 +1,7 @@
 <template>
   <div id="map" class="w-full h-full">
     <div class="node-counter">
-      <span v-if="devicesTotal === 0">🔄 Загрузка данных...</span>
+      <span v-if="!isDataLoaded">🔄 Загрузка данных...</span>
       <span v-else>
         Узлов: {{ devicesTotal }} |
         <span
@@ -129,7 +129,14 @@ let map, openedNodeId;
 // shallowRef: десятки тысяч устройств не оборачиваем в глубокие реактивные прокси
 const devices = shallowRef({});
 const meshcoreDevices = shallowRef({});
-const devicesTotal = computed(() => Object.keys(devices.value).length);
+// Пока не пришли данные meshtastic, показываем «Загрузка данных...»
+const isDataLoaded = computed(() => Object.keys(devices.value).length > 0);
+// Узлов с учётом переключателей источников
+const devicesTotal = computed(
+  () =>
+    (showMeshtastic.value ? Object.keys(devices.value).length : 0) +
+    (showMeshcore.value ? Object.keys(meshcoreDevices.value).length : 0)
+);
 const pointsOnMap = ref(0);
 const geolocationStatus = ref(null);
 const showChartModal = ref(false);
@@ -1750,8 +1757,11 @@ const renderBallons = (
   openedBalloonContent = null
 ) => {
   try {
+    // Показывать нечего (например, все источники выключены или у
+    // включённого нет свежих точек) — убираем старые маркеры, иначе
+    // они так и остались бы на карте
     if (!devices || Object.keys(devices).length === 0) {
-      console.warn("⚠️ renderBallons: нет устройств для отображения");
+      clearDeviceMarkers();
       return;
     }
 
@@ -2087,7 +2097,6 @@ const fetchMainDevices = async () => {
   const data = await response.json();
   const newDevices = data?.data || {};
   devices.value = newDevices;
-  emit("devicesCount", Object.keys(newDevices).length, newDevices);
 };
 
 // Загружает meshtastic и meshcore параллельно. Рендер — на стороне вызывающего.
@@ -2099,7 +2108,12 @@ const fetchDevicesData = async ({ showErrors = true } = {}) => {
   ]);
   invalidateDevicesCache();
 
-  if (mainResult.status === "fulfilled") return;
+  if (mainResult.status === "fulfilled") {
+    // Как и при переключении источников — только включённые
+    const allDevices = getAllDevices();
+    emit("devicesCount", Object.keys(allDevices).length, allDevices);
+    return;
+  }
 
   const error = mainResult.reason;
   console.error("❌ Ошибка загрузки данных устройств:", error);
@@ -2604,13 +2618,9 @@ onMounted(async () => {
       }
     }
 
-    // Только устройства с координатами и активностью за 24 часа
+    // Только устройства с координатами и свежей активностью.
+    // Пустой набор тоже передаём: renderBallons уберёт старые маркеры
     const allDevices = getDisplayDevices();
-
-    // Проверяем, что данные загружены и не пустые
-    if (!allDevices || Object.keys(allDevices).length === 0) {
-      return;
-    }
 
     // Перерисовываем маркеры с учетом новых границ карты
     // НЕ очищаем все маркеры, а перерисовываем их
